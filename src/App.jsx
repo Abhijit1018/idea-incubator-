@@ -3,23 +3,43 @@ import Header from './components/Header';
 import IdeaInput from './components/IdeaInput';
 import CatalogCard from './components/CatalogCard';
 import IdeaDetail from './components/IdeaDetail';
+import { Search } from 'lucide-react';
+
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000').replace(/\/$/, '');
 
 function App() {
   const [entries, setEntries] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [selectedEntry, setSelectedEntry] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
 
   // Poll for updates every 5 seconds
   useEffect(() => {
     fetchCatalogs();
     const interval = setInterval(fetchCatalogs, 5000);
     return () => clearInterval(interval);
-  }, []);
+  }, [searchQuery]);
 
   const fetchCatalogs = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/catalogs/');
+      let res;
+      if (searchQuery.trim()) {
+        // Search catalogs using vector similarity
+        res = await fetch(`${API_BASE_URL}/api/catalogs/search`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            query: searchQuery,
+            limit: 50
+          })
+        });
+      } else {
+        // Get all catalogs
+        res = await fetch(`${API_BASE_URL}/api/catalogs/`);
+      }
+      
       if (res.ok) {
         const data = await res.json();
         setEntries(data);
@@ -31,13 +51,13 @@ function App() {
     }
   };
 
-  const handleIdeaSubmit = async (raw_input) => {
+  const handleIdeaSubmit = async ({ raw_input, input_type }) => {
     setIsSubmitting(true);
     try {
-      const res = await fetch('http://localhost:5000/api/ideas/submit', {
+      const res = await fetch(`${API_BASE_URL}/api/ideas/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ raw_input })
+        body: JSON.stringify({ raw_input, input_type })
       });
       if (res.ok) {
         // Optimistically reload
@@ -56,29 +76,46 @@ function App() {
       <div className="absolute top-0 left-[-10vw] w-[40vw] h-[40vw] bg-neo-accent rounded-full opacity-[0.03] blur-[100px] pointer-events-none"></div>
       <div className="absolute bottom-[-10vw] right-[-10vw] w-[50vw] h-[50vw] bg-white rounded-full opacity-[0.02] blur-[120px] pointer-events-none"></div>
 
-      <div className="max-w-6xl mx-auto relative z-10">
-        <Header />
+       <div className="max-w-6xl mx-auto relative z-10">
+         <Header />
 
-        {selectedEntry ? (
-          <div className="mt-8">
-            <IdeaDetail
-              entry={selectedEntry}
-              onBack={() => setSelectedEntry(null)}
-            />
-          </div>
-        ) : (
-          <>
-            <IdeaInput onSubmit={handleIdeaSubmit} isSubmitting={isSubmitting} />
+         {selectedEntry ? (
+           <div className="mt-8">
+             <IdeaDetail
+               entry={selectedEntry}
+               onBack={() => setSelectedEntry(null)}
+             />
+           </div>
+         ) : (
+           <>
+             <IdeaInput onSubmit={handleIdeaSubmit} isSubmitting={isSubmitting} />
 
-            <div className="mt-20">
-              <div className="flex items-center justify-between mb-8 border-b-2 border-neo-border pb-4">
-                <h2 className="text-4xl font-display font-bold uppercase tracking-tighter">
-                  Intelligence <span className="text-neo-muted">Catalog</span>
-                </h2>
-                <div className="text-sm font-sans font-medium bg-black px-3 py-1 border border-neo-border text-neo-accent">
-                  {entries.length} ENTRIES
-                </div>
-              </div>
+             <div className="mt-20">
+               <div className="flex items-center justify-between mb-8 border-b-2 border-neo-border pb-4">
+                 <div className="flex flex-col">
+                   <h2 className="text-4xl font-display font-bold uppercase tracking-tighter">
+                     Intelligence <span className="text-neo-muted">Catalog</span>
+                   </h2>
+                   <div className="flex items-center gap-2">
+                     <input
+                       value={searchQuery}
+                       onChange={(e) => setSearchQuery(e.target.value)}
+                       placeholder="Search catalogs..."
+                       className="px-3 py-1 bg-black/40 text-white border border-neo-border focus:outline-none focus:ring-2 focus:ring-neo-accent w-[200px]"
+                     />
+                     <button
+                       onClick={() => setIsSearching(true)}
+                       disabled={!searchQuery.trim()}
+                       className={`px-4 py-2 bg-neo-accent text-black font-display font-bold uppercase tracking-wider transition-colors hover:bg-white hover:text-black disabled:opacity-50`}
+                     >
+                       {isSearching ? 'Searching...' : 'Search'}
+                     </button>
+                   </div>
+                 </div>
+                 <div className="text-sm font-sans font-medium bg-black px-3 py-1 border border-neo-border text-neo-accent">
+                   {entries.length} ENTRIES
+                 </div>
+               </div>
 
               {loading ? (
                 <div className="flex justify-center p-12">

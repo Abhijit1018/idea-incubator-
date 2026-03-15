@@ -56,7 +56,7 @@ export default function CatalogCard({ entry, index, onSelect }) {
                     </span>
                 </div>
                 <div className={`px-3 py-1 font-display font-bold text-sm uppercase tracking-wider border-2 ${isPending ? 'bg-yellow-500/10 border-yellow-500 text-yellow-500' : 'bg-neo-accent/10 border-neo-accent text-neo-accent'}`}>
-                    {status}
+                    {entry.input_type === 'tool' ? 'TOOL' : 'IDEA'} • {status}
                 </div>
             </div>
 
