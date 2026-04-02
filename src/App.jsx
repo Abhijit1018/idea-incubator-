@@ -4,8 +4,7 @@ import IdeaInput from './components/IdeaInput';
 import CatalogCard from './components/CatalogCard';
 import IdeaDetail from './components/IdeaDetail';
 import { Search } from 'lucide-react';
-
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000').replace(/\/$/, '');
+import { buildApiUrl } from './lib/api';
 
 function App() {
   const [entries, setEntries] = useState([]);
@@ -23,11 +22,19 @@ function App() {
   }, [searchQuery]);
 
   const fetchCatalogs = async () => {
+    const isSearchMode = Boolean(searchQuery.trim());
+
+    if (isSearchMode) {
+      setIsSearching(true);
+    } else {
+      setIsSearching(false);
+    }
+
     try {
       let res;
-      if (searchQuery.trim()) {
+      if (isSearchMode) {
         // Search catalogs using vector similarity
-        res = await fetch(`${API_BASE_URL}/api/catalogs/search`, {
+        res = await fetch(buildApiUrl('/api/catalogs/search'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -37,7 +44,7 @@ function App() {
         });
       } else {
         // Get all catalogs
-        res = await fetch(`${API_BASE_URL}/api/catalogs/`);
+        res = await fetch(buildApiUrl('/api/catalogs/'));
       }
       
       if (res.ok) {
@@ -47,6 +54,7 @@ function App() {
     } catch (e) {
       console.error("Failed to fetch catalogs", e);
     } finally {
+      if (isSearchMode) setIsSearching(false);
       if (loading) setLoading(false);
     }
   };
@@ -54,7 +62,7 @@ function App() {
   const handleIdeaSubmit = async ({ raw_input, input_type }) => {
     setIsSubmitting(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/ideas/submit`, {
+      const res = await fetch(buildApiUrl('/api/ideas/submit'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ raw_input, input_type })
@@ -104,8 +112,8 @@ function App() {
                        className="px-3 py-1 bg-black/40 text-white border border-neo-border focus:outline-none focus:ring-2 focus:ring-neo-accent w-[200px]"
                      />
                      <button
-                       onClick={() => setIsSearching(true)}
-                       disabled={!searchQuery.trim()}
+                       onClick={fetchCatalogs}
+                       disabled={!searchQuery.trim() || isSearching}
                        className={`px-4 py-2 bg-neo-accent text-black font-display font-bold uppercase tracking-wider transition-colors hover:bg-white hover:text-black disabled:opacity-50`}
                      >
                        {isSearching ? 'Searching...' : 'Search'}

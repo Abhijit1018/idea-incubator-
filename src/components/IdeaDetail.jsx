@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import mermaid from 'mermaid';
 import { ArrowLeft, Layers, Zap, AlertTriangle, GitBranch, ArrowRight, CheckCircle2, MessageSquare, Search, Send } from 'lucide-react';
+import { buildApiUrl } from '../lib/api';
 
 mermaid.initialize({
     startOnLoad: true,
@@ -9,8 +10,6 @@ mermaid.initialize({
     securityLevel: 'loose',
     fontFamily: '"Space Grotesk", sans-serif',
 });
-
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000').replace(/\/$/, '');
 
 function MermaidDiagram({ chart }) {
     const ref = useRef(null);
@@ -146,7 +145,7 @@ export default function IdeaDetail({ entry, onBack }) {
     // Fetch chat messages for this catalog entry
         const fetchChatMessages = async () => {
             try {
-                const response = await fetch(`${API_BASE_URL}/api/catalogs/${entry.id}/chat`);
+                const response = await fetch(buildApiUrl(`/api/catalogs/${entry.id}/chat`));
             if (response.ok) {
                 const messages = await response.json();
                 setChatMessages(messages);
@@ -163,7 +162,7 @@ export default function IdeaDetail({ entry, onBack }) {
         setIsChatLoading(true);
         try {
             // Send to n8n webhook for processing with full catalog context
-            const response = await fetch(`${API_BASE_URL}/api/webhooks/chat-message`, {
+            const response = await fetch(buildApiUrl('/api/webhooks/chat-message'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -207,7 +206,7 @@ export default function IdeaDetail({ entry, onBack }) {
         
         setIsSearching(true);
         try {
-            const response = await fetch(`${API_BASE_URL}/api/catalogs/search`, {
+            const response = await fetch(buildApiUrl('/api/catalogs/search'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

@@ -75,4 +75,6 @@ docker run -p 8080:80 idea-incubator-frontend
 
 - Set `VITE_API_BASE_URL` to the public backend URL.
 - Ensure backend CORS allows your frontend domain.
+- On Netlify, set `VITE_API_BASE_URL` in Site Settings > Environment variables before deploy.
+- If `VITE_API_BASE_URL` is omitted in production, frontend falls back to same-origin `/api/*` requests (requires Netlify redirects/proxy setup).
 - This app is SPA-routed; the provided Nginx config includes `try_files` fallback to `index.html`.
