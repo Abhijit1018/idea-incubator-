@@ -1,3 +1,5 @@
+import { supabase } from './supabase';
+
 const envApiBaseUrl = (import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/$/, '');
 
 const isBrowser = typeof window !== 'undefined';
@@ -15,4 +17,29 @@ if (!envApiBaseUrl && !isLocalHost) {
 export function buildApiUrl(path) {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
   return `${API_BASE_URL}${normalizedPath}`;
+}
+
+/**
+ * Fetch wrapper that automatically attaches the Supabase auth token.
+ * Use this for all authenticated API calls.
+ */
+export async function authFetch(path, options = {}) {
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+
+  const headers = {
+    ...(options.headers || {}),
+  };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  // Default to JSON content-type if body is present and no content-type set
+  if (options.body && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json';
+  }
+
+  const url = buildApiUrl(path);
+  return fetch(url, { ...options, headers });
 }

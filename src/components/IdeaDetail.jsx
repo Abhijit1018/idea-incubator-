@@ -1,8 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import mermaid from 'mermaid';
-import { ArrowLeft, Layers, Zap, AlertTriangle, GitBranch, ArrowRight, CheckCircle2, MessageSquare, Search, Send } from 'lucide-react';
-import { buildApiUrl } from '../lib/api';
+import { ArrowLeft, Layers, Zap, AlertTriangle, GitBranch, ArrowRight, CheckCircle2, MessageSquare, Search, Send, Check, X, Pencil } from 'lucide-react';
+import { authFetch } from '../lib/api';
+import ReactMarkdown from 'react-markdown';
+import { useAuth } from '../lib/AuthContext';
 
 mermaid.initialize({
     startOnLoad: true,
@@ -34,12 +36,9 @@ function MermaidDiagram({ chart }) {
                         .replace(/\\n/g, '\n')
                         .trim();
 
-                    // Auto-quote square bracket nodes containing parentheses or spaces
-                    // Example: G[API Gateway (Node.js)] -> G["API Gateway (Node.js)"]
-                    // But ignore cylinder nodes: R[(Database)]
                     cleanMermaid = cleanMermaid.replace(/([A-Za-z0-9_-]+)\[([^\]]+)\]/g, (match, node, innerText) => {
                         if (innerText.startsWith('(') && innerText.endsWith(')')) {
-                            return match; // Cylinder node
+                            return match;
                         }
                         if (/[()]/.test(innerText) && !innerText.includes('"')) {
                             return `${node}["${innerText}"]`;
@@ -47,12 +46,10 @@ function MermaidDiagram({ chart }) {
                         return match;
                     });
 
-                    // Fix arrows with text that might have spaces but no quotes: A -->|Text Prompt| B
                     cleanMermaid = cleanMermaid.replace(/(-->\|)([^|]+)(\|)/g, (match, p1, p2, p3) => {
                         return `${p1}${p2.trim()}${p3}`;
                     });
 
-                    // Forcefully fix hallucinated arrow heads after text nodes: -->|Text|> B
                     cleanMermaid = cleanMermaid.replace(/(-->\|[^|]+\|)>([\s]*)/g, '$1$2');
                 }
 
@@ -96,7 +93,74 @@ function MermaidDiagram({ chart }) {
     return <div ref={ref} className="overflow-x-auto p-4 bg-black/40 border border-neo-border flex justify-center w-full min-h-[100px]" />;
 }
 
-export default function IdeaDetail({ entry, onBack }) {
+/**
+ * Renders a card showing proposed changes from AI chat, with Accept/Reject buttons.
+ */
+function ProposedChangesCard({ proposedChanges, onAccept, onReject, isApplying }) {
+    const FIELD_LABELS = {
+        summary: 'Summary',
+        tech_stack: 'Tech Stack',
+        pros_cons: 'Pros & Cons',
+        similar_tools: 'Similar Tools',
+        creator: 'Creator',
+        link: 'Link',
+        installation: 'Installation',
+        unique_features: 'Unique Features',
+        market_trend: 'Market Trend',
+        mermaid_syntax: 'Architecture Diagram',
+    };
+
+    return (
+        <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="border-2 border-neo-accent bg-neo-accent/5 p-4 my-3"
+        >
+            <div className="flex items-center gap-2 mb-3">
+                <Pencil size={16} className="text-neo-accent" />
+                <span className="font-display font-bold text-neo-accent uppercase tracking-wider text-sm">
+                    Proposed Changes
+                </span>
+            </div>
+
+            <div className="space-y-3 mb-4">
+                {Object.entries(proposedChanges).map(([field, value]) => (
+                    <div key={field} className="bg-black/30 p-3 border border-neo-border">
+                        <p className="text-xs font-display uppercase tracking-wider text-neo-muted mb-1">
+                            {FIELD_LABELS[field] || field}
+                        </p>
+                        <p className="text-sm font-sans text-white whitespace-pre-wrap">
+                            {typeof value === 'string' ? value : JSON.stringify(value, null, 2)}
+                        </p>
+                    </div>
+                ))}
+            </div>
+
+            <div className="flex gap-3">
+                <button
+                    onClick={onAccept}
+                    disabled={isApplying}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-green-500 border-2 border-black text-black font-display font-bold uppercase tracking-wider text-sm transition-all hover:bg-green-400 hover:-translate-y-0.5 disabled:opacity-50 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]"
+                >
+                    <Check size={16} />
+                    {isApplying ? 'Applying...' : 'Accept'}
+                </button>
+                <button
+                    onClick={onReject}
+                    disabled={isApplying}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-[#ff5555] border-2 border-black text-black font-display font-bold uppercase tracking-wider text-sm transition-all hover:bg-red-400 hover:-translate-y-0.5 disabled:opacity-50 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]"
+                >
+                    <X size={16} />
+                    Reject
+                </button>
+            </div>
+        </motion.div>
+    );
+}
+
+
+export default function IdeaDetail({ entry, onBack, onEntryUpdate }) {
+    const { user } = useAuth();
     const {
         raw_input, summary, tech_stack, input_type,
         pros_cons, similar_tools, mermaid_syntax, image_url, created_at, status,
@@ -107,8 +171,33 @@ export default function IdeaDetail({ entry, onBack }) {
     const [chatMessages, setChatMessages] = useState([]);
     const [chatInput, setChatInput] = useState('');
     const [isChatLoading, setIsChatLoading] = useState(false);
-    const [isSearching, setIsSearching] = useState(false);
+    const [isSearchMode, setIsSearchMode] = useState(false);
     const [searchResults, setSearchResults] = useState([]);
+    const [applyingChangeId, setApplyingChangeId] = useState(null);
+    const [dismissedProposals, setDismissedProposals] = useState(new Set());
+    const [isEditing, setIsEditing] = useState(false);
+    const [isSavingEdit, setIsSavingEdit] = useState(false);
+    const [entryDraft, setEntryDraft] = useState({
+        raw_input: raw_input || '',
+        summary: summary || '',
+        market_trend: market_trend || '',
+        creator: creator || '',
+        link: link || '',
+        installation: installation || '',
+    });
+    const [draftTechStack, setDraftTechStack] = useState('');
+    const [draftSimilarTools, setDraftSimilarTools] = useState('');
+    const [draftUniqueFeatures, setDraftUniqueFeatures] = useState('');
+    const [draftPros, setDraftPros] = useState('');
+    const [draftCons, setDraftCons] = useState('');
+    const [draftMermaid, setDraftMermaid] = useState('');
+    const [draftTags, setDraftTags] = useState('');
+    const [updates, setUpdates] = useState([]);
+    const [newUpdate, setNewUpdate] = useState('');
+    const [newUpdateType, setNewUpdateType] = useState('progress');
+    const [isPostingUpdate, setIsPostingUpdate] = useState(false);
+    const chatEndRef = useRef(null);
+    const isOwner = user?.id === entry.user_id;
 
     // Parsers
     const safeArray = (data) => {
@@ -131,21 +220,50 @@ export default function IdeaDetail({ entry, onBack }) {
         return { pros: safeArray(data?.pros), cons: safeArray(data?.cons) };
     };
 
+    const arrayToLines = (arr) => (arr || []).join('\n');
+    const linesToArray = (value) => value
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+
     const techArray = safeArray(tech_stack);
     const toolsArray = safeArray(similar_tools);
     const pcData = safeProsCons(pros_cons);
 
     const isPending = status === 'pending';
 
+    // Scroll chat to bottom when messages change
+    useEffect(() => {
+        chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [chatMessages]);
+
     // Fetch chat messages when component mounts or entry changes
     useEffect(() => {
         fetchChatMessages();
+        fetchUpdates();
     }, [entry.id]);
 
-    // Fetch chat messages for this catalog entry
-        const fetchChatMessages = async () => {
-            try {
-                const response = await fetch(buildApiUrl(`/api/catalogs/${entry.id}/chat`));
+    useEffect(() => {
+        setEntryDraft({
+            raw_input: entry.raw_input || '',
+            summary: entry.summary || '',
+            market_trend: entry.market_trend || '',
+            creator: entry.creator || '',
+            link: entry.link || '',
+            installation: entry.installation || '',
+        });
+        setDraftTechStack(arrayToLines(safeArray(entry.tech_stack)));
+        setDraftSimilarTools(arrayToLines(safeArray(entry.similar_tools)));
+        setDraftUniqueFeatures(arrayToLines(safeArray(entry.unique_features)));
+        setDraftPros(arrayToLines(safeProsCons(entry.pros_cons).pros));
+        setDraftCons(arrayToLines(safeProsCons(entry.pros_cons).cons));
+        setDraftMermaid(entry.mermaid_syntax || '');
+        setDraftTags(arrayToLines(safeArray(entry.tags)));
+    }, [entry]);
+
+    const fetchChatMessages = async () => {
+        try {
+            const response = await authFetch(`/api/catalogs/${entry.id}/chat`);
             if (response.ok) {
                 const messages = await response.json();
                 setChatMessages(messages);
@@ -155,20 +273,28 @@ export default function IdeaDetail({ entry, onBack }) {
         }
     };
 
-    // Send a new chat message via n8n workflow
-    const sendChatMessage = async (isUserMessage = true) => {
-        if (!chatInput.trim() && isUserMessage) return;
+    const fetchUpdates = async () => {
+        try {
+            const response = await authFetch(`/api/catalogs/${entry.id}/updates`);
+            if (response.ok) {
+                const data = await response.json();
+                setUpdates(Array.isArray(data) ? data : []);
+            }
+        } catch (error) {
+            console.error('Error fetching updates:', error);
+        }
+    };
+
+    const sendChatMessage = async () => {
+        if (!chatInput.trim()) return;
         
         setIsChatLoading(true);
         try {
-            // Send to n8n webhook for processing with full catalog context
-            const response = await fetch(buildApiUrl('/api/webhooks/chat-message'), {
+            const response = await authFetch('/api/webhooks/chat-message', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     entry_id: entry.id,
                     message: chatInput,
-                    user_id: "current-user", // In a real app, this would come from auth
                     catalog_context: {
                         summary: entry.summary || "",
                         tech_stack: entry.tech_stack || [],
@@ -180,18 +306,16 @@ export default function IdeaDetail({ entry, onBack }) {
             });
             
             if (response.ok) {
-                // n8n will process and store the user message, then call back to store AI response
-                // We'll refresh the chat messages to see both
                 setChatInput('');
-                await fetchChatMessages(); // Refresh to see stored messages
+                await fetchChatMessages();
                 
-                // If this is a user message, we expect n8n to process and call back with AI response
-                // We'll wait a bit then refresh again to see the AI response
-                if (isUserMessage) {
-                    setTimeout(async () => {
-                        await fetchChatMessages(); // Refresh to see AI response
-                    }, 3000); // Wait for n8n processing
-                }
+                // Poll for AI response
+                setTimeout(async () => {
+                    await fetchChatMessages();
+                }, 3000);
+                setTimeout(async () => {
+                    await fetchChatMessages();
+                }, 8000);
             }
         } catch (error) {
             console.error('Error sending chat message:', error);
@@ -200,15 +324,13 @@ export default function IdeaDetail({ entry, onBack }) {
         }
     };
 
-    // Search catalogs using vector similarity
     const searchCatalogs = async () => {
         if (!chatInput.trim()) return;
         
-        setIsSearching(true);
+        setIsChatLoading(true);
         try {
-            const response = await fetch(buildApiUrl('/api/catalogs/search'), {
+            const response = await authFetch('/api/catalogs/search', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     query: chatInput,
                     limit: 5
@@ -222,7 +344,90 @@ export default function IdeaDetail({ entry, onBack }) {
         } catch (error) {
             console.error('Error searching catalogs:', error);
         } finally {
-            setIsSearching(false);
+            setIsChatLoading(false);
+        }
+    };
+
+    const handleAcceptChanges = async (messageId, proposedChanges) => {
+        setApplyingChangeId(messageId);
+        try {
+            const response = await authFetch(`/api/catalogs/${entry.id}/apply-chat-edit`, {
+                method: 'POST',
+                body: JSON.stringify({ changes: proposedChanges })
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                // Update the entry in the parent component
+                if (data.entry && onEntryUpdate) {
+                    onEntryUpdate(data.entry);
+                }
+                setDismissedProposals(prev => new Set([...prev, messageId]));
+            }
+        } catch (error) {
+            console.error('Error applying changes:', error);
+        } finally {
+            setApplyingChangeId(null);
+        }
+    };
+
+    const handleRejectChanges = (messageId) => {
+        setDismissedProposals(prev => new Set([...prev, messageId]));
+    };
+
+    const handleSaveEntryEdits = async () => {
+        setIsSavingEdit(true);
+        try {
+            const payload = {
+                ...entryDraft,
+                tech_stack: linesToArray(draftTechStack),
+                similar_tools: linesToArray(draftSimilarTools),
+                unique_features: linesToArray(draftUniqueFeatures),
+                pros_cons: {
+                    pros: linesToArray(draftPros),
+                    cons: linesToArray(draftCons),
+                },
+                mermaid_syntax: draftMermaid,
+                tags: linesToArray(draftTags),
+            };
+            const response = await authFetch(`/api/catalogs/${entry.id}`, {
+                method: 'PUT',
+                body: JSON.stringify(payload),
+            });
+            if (response.ok) {
+                const data = await response.json();
+                if (data.entry && onEntryUpdate) {
+                    onEntryUpdate(data.entry);
+                }
+                setIsEditing(false);
+            }
+        } catch (error) {
+            console.error('Error saving entry edits:', error);
+        } finally {
+            setIsSavingEdit(false);
+        }
+    };
+
+    const handlePostUpdate = async () => {
+        if (!newUpdate.trim()) return;
+        setIsPostingUpdate(true);
+        try {
+            const response = await authFetch(`/api/catalogs/${entry.id}/updates`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    content: newUpdate,
+                    update_type: newUpdateType,
+                }),
+            });
+
+            if (response.ok) {
+                setNewUpdate('');
+                await fetchUpdates();
+            }
+        } catch (error) {
+            console.error('Error posting update:', error);
+        } finally {
+            setIsPostingUpdate(false);
         }
     };
 
@@ -274,9 +479,162 @@ export default function IdeaDetail({ entry, onBack }) {
                             <Layers size={24} />
                             Concept Summary
                         </h3>
-                        <p className="font-sans text-neo-text leading-relaxed text-lg bg-black/30 p-6 border-l-4 border-neo-accent">
-                            {summary || "No summary provided."}
-                        </p>
+                        {isEditing ? (
+                            <textarea
+                                value={entryDraft.summary}
+                                onChange={(e) => setEntryDraft(prev => ({ ...prev, summary: e.target.value }))}
+                                className="font-sans text-neo-text leading-relaxed text-base bg-black/30 p-6 border-l-4 border-neo-accent min-h-[140px] resize-y"
+                            />
+                        ) : (
+                            <p className="font-sans text-neo-text leading-relaxed text-lg bg-black/30 p-6 border-l-4 border-neo-accent">
+                                {summary || "No summary provided."}
+                            </p>
+                        )}
+                    </div>
+                </div>
+
+                {isOwner && (
+                    <div className="border border-neo-border bg-black/20 p-6">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="font-display text-white font-bold uppercase tracking-wide">Edit Catalog</h3>
+                            <button
+                                onClick={() => setIsEditing(!isEditing)}
+                                className="px-3 py-1.5 border border-neo-border text-sm text-neo-text hover:border-white transition-colors"
+                            >
+                                {isEditing ? 'Close Editor' : 'Edit Post'}
+                            </button>
+                        </div>
+                        {isEditing && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <input
+                                    value={entryDraft.raw_input}
+                                    onChange={(e) => setEntryDraft(prev => ({ ...prev, raw_input: e.target.value }))}
+                                    placeholder="Title"
+                                    className="px-3 py-2 bg-black/40 border border-neo-border text-white"
+                                />
+                                <input
+                                    value={entryDraft.creator}
+                                    onChange={(e) => setEntryDraft(prev => ({ ...prev, creator: e.target.value }))}
+                                    placeholder="Creator"
+                                    className="px-3 py-2 bg-black/40 border border-neo-border text-white"
+                                />
+                                <input
+                                    value={entryDraft.link}
+                                    onChange={(e) => setEntryDraft(prev => ({ ...prev, link: e.target.value }))}
+                                    placeholder="Link"
+                                    className="px-3 py-2 bg-black/40 border border-neo-border text-white"
+                                />
+                                <input
+                                    value={entryDraft.installation}
+                                    onChange={(e) => setEntryDraft(prev => ({ ...prev, installation: e.target.value }))}
+                                    placeholder="Installation"
+                                    className="px-3 py-2 bg-black/40 border border-neo-border text-white"
+                                />
+                                <textarea
+                                    value={draftTags}
+                                    onChange={(e) => setDraftTags(e.target.value)}
+                                    placeholder="Tags (one per line)"
+                                    className="md:col-span-2 px-3 py-2 bg-black/40 border border-neo-border text-white min-h-[70px]"
+                                />
+                                <textarea
+                                    value={draftTechStack}
+                                    onChange={(e) => setDraftTechStack(e.target.value)}
+                                    placeholder="Tech stack (one per line)"
+                                    className="md:col-span-2 px-3 py-2 bg-black/40 border border-neo-border text-white min-h-[90px]"
+                                />
+                                <textarea
+                                    value={draftSimilarTools}
+                                    onChange={(e) => setDraftSimilarTools(e.target.value)}
+                                    placeholder="Similar tools (one per line)"
+                                    className="md:col-span-2 px-3 py-2 bg-black/40 border border-neo-border text-white min-h-[90px]"
+                                />
+                                <textarea
+                                    value={draftUniqueFeatures}
+                                    onChange={(e) => setDraftUniqueFeatures(e.target.value)}
+                                    placeholder="Unique features (one per line)"
+                                    className="md:col-span-2 px-3 py-2 bg-black/40 border border-neo-border text-white min-h-[90px]"
+                                />
+                                <textarea
+                                    value={draftPros}
+                                    onChange={(e) => setDraftPros(e.target.value)}
+                                    placeholder="Pros (one per line)"
+                                    className="px-3 py-2 bg-black/40 border border-neo-border text-white min-h-[90px]"
+                                />
+                                <textarea
+                                    value={draftCons}
+                                    onChange={(e) => setDraftCons(e.target.value)}
+                                    placeholder="Cons (one per line)"
+                                    className="px-3 py-2 bg-black/40 border border-neo-border text-white min-h-[90px]"
+                                />
+                                <textarea
+                                    value={draftMermaid}
+                                    onChange={(e) => setDraftMermaid(e.target.value)}
+                                    placeholder="Mermaid diagram"
+                                    className="md:col-span-2 px-3 py-2 bg-black/40 border border-neo-border text-white min-h-[120px]"
+                                />
+                                <textarea
+                                    value={entryDraft.market_trend}
+                                    onChange={(e) => setEntryDraft(prev => ({ ...prev, market_trend: e.target.value }))}
+                                    placeholder="Market trend"
+                                    className="md:col-span-2 px-3 py-2 bg-black/40 border border-neo-border text-white min-h-[90px]"
+                                />
+                                <div className="md:col-span-2 flex justify-end">
+                                    <button
+                                        onClick={handleSaveEntryEdits}
+                                        disabled={isSavingEdit}
+                                        className="px-4 py-2 bg-neo-accent text-black font-display font-bold uppercase tracking-wider disabled:opacity-50"
+                                    >
+                                        {isSavingEdit ? 'Saving...' : 'Save Changes'}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                <div className="border border-neo-border bg-black/20 p-6">
+                    <h3 className="font-display text-white font-bold uppercase tracking-wide mb-4">Update Thread</h3>
+                    {isOwner && (
+                        <div className="mb-4 grid grid-cols-1 md:grid-cols-4 gap-2">
+                            <select
+                                value={newUpdateType}
+                                onChange={(e) => setNewUpdateType(e.target.value)}
+                                className="px-3 py-2 bg-black/40 border border-neo-border text-white"
+                            >
+                                <option value="progress">Progress</option>
+                                <option value="feedback">Feedback</option>
+                                <option value="changelog">Changelog</option>
+                                <option value="milestone">Milestone</option>
+                            </select>
+                            <textarea
+                                value={newUpdate}
+                                onChange={(e) => setNewUpdate(e.target.value)}
+                                placeholder="Post a daily update or feedback change..."
+                                className="md:col-span-3 px-3 py-2 bg-black/40 border border-neo-border text-white min-h-[80px]"
+                            />
+                            <div className="md:col-span-4 flex justify-end">
+                                <button
+                                    onClick={handlePostUpdate}
+                                    disabled={isPostingUpdate || !newUpdate.trim()}
+                                    className="px-4 py-2 bg-neo-accent text-black font-display font-bold uppercase tracking-wider disabled:opacity-50"
+                                >
+                                    {isPostingUpdate ? 'Posting...' : 'Post Update'}
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                    <div className="space-y-3 max-h-72 overflow-y-auto">
+                        {updates.length === 0 ? (
+                            <p className="text-neo-muted text-sm italic">No updates yet.</p>
+                        ) : updates.map((u) => (
+                            <div key={u.id} className="p-3 bg-black/30 border border-neo-border">
+                                <div className="flex items-center justify-between mb-1">
+                                    <span className="text-xs uppercase tracking-wider text-neo-accent">{u.update_type}</span>
+                                    <span className="text-xs text-neo-muted">{new Date(u.created_at).toLocaleString()}</span>
+                                </div>
+                                <p className="text-sm text-white whitespace-pre-wrap">{u.content}</p>
+                            </div>
+                        ))}
                     </div>
                 </div>
 
@@ -387,23 +745,23 @@ export default function IdeaDetail({ entry, onBack }) {
                  {/* Chat Interface */}
                  <div className="border-t-2 border-neo-border pt-8 mt-4">
                      <h3 className="font-display text-white font-bold text-2xl mb-6 uppercase tracking-wide flex justify-between items-center">
-                         {isSearching ? 'Search Catalogs' : 'Chat with Catalog'}
+                         {isSearchMode ? 'Search Catalogs' : 'Chat with Catalog'}
                          <div className="flex items-center gap-2">
                              <button
                                  onClick={() => {
-                                  setIsSearching(!isSearching);
+                                  setIsSearchMode(!isSearchMode);
                                   setChatInput('');
                                   setSearchResults([]);
                               }}
-                                 className={`p-2 border-2 border-black bg-[#ff5555] text-black hover:bg-white transition-colors shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-1 ${isSearching ? 'bg-white text-black' : ''}`}
+                                 className={`p-2 border-2 border-black bg-[#ff5555] text-black hover:bg-white transition-colors shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-1 ${isSearchMode ? 'bg-white text-black' : ''}`}
                              >
-                                 {isSearching ? <MessageSquare size={20} /> : <Search size={20} />}
+                                 {isSearchMode ? <MessageSquare size={20} /> : <Search size={20} />}
                              </button>
                          </div>
                      </h3>
                      
                      {/* Search Results */}
-                     {isSearching && searchResults.length > 0 && (
+                     {isSearchMode && searchResults.length > 0 && (
                          <div className="bg-black/30 p-4 rounded-lg mb-4">
                              <h4 className="font-display text-white font-bold mb-2">Search Results</h4>
                              <ul className="space-y-2">
@@ -427,15 +785,35 @@ export default function IdeaDetail({ entry, onBack }) {
                          {chatMessages.length > 0 ? (
                              <div className="space-y-3">
                                  {chatMessages.map((message, index) => (
-                                     <div key={index} className={`flex ${message.is_user ? 'justify-end' : 'justify-start'}`}>
-                                         <div className={`max-w-[80%] px-4 py-2 rounded-lg ${message.is_user ? 'bg-neo-accent text-black' : 'bg-black/50 text-white'}`}>
-                                             <p className="text-sm">{message.message}</p>
-                                             <span className="text-xs text-neo-muted block">
-                                                 {new Date(message.created_at).toLocaleTimeString()}
-                                             </span>
+                                     <div key={message.id || index}>
+                                         <div className={`flex ${message.is_user ? 'justify-end' : 'justify-start'}`}>
+                                             <div className={`max-w-[80%] px-4 py-2 rounded-lg ${message.is_user ? 'bg-neo-accent text-black' : 'bg-black/50 text-white'}`}>
+                                                 <div className="text-sm prose prose-invert prose-sm max-w-none">
+                                                     <ReactMarkdown>{message.message}</ReactMarkdown>
+                                                 </div>
+                                                 <span className="text-xs text-neo-muted block mt-1">
+                                                     {new Date(message.created_at).toLocaleTimeString()}
+                                                 </span>
+                                             </div>
                                          </div>
+                                         
+                                         {/* Proposed changes card */}
+                                         {message.proposed_changes && !dismissedProposals.has(message.id) && (
+                                             <ProposedChangesCard
+                                                 proposedChanges={message.proposed_changes}
+                                                 onAccept={() => handleAcceptChanges(message.id, message.proposed_changes)}
+                                                 onReject={() => handleRejectChanges(message.id)}
+                                                 isApplying={applyingChangeId === message.id}
+                                             />
+                                         )}
+                                         {message.proposed_changes && dismissedProposals.has(message.id) && (
+                                             <div className="text-xs text-neo-muted italic ml-4 mt-1">
+                                                 ✓ Changes {applyingChangeId === null ? 'handled' : 'applied'}
+                                             </div>
+                                         )}
                                      </div>
                                  ))}
+                                 <div ref={chatEndRef} />
                              </div>
                          ) : (
                              <p className="text-neo-muted text-center py-8">No messages yet. Start the conversation!</p>
@@ -450,19 +828,19 @@ export default function IdeaDetail({ entry, onBack }) {
                              onKeyDown={(e) => {
                                   if (e.key === 'Enter' && !e.shiftKey) {
                                       e.preventDefault();
-                                      isSearching ? searchCatalogs() : sendChatMessage();
+                                      isSearchMode ? searchCatalogs() : sendChatMessage();
                                   }
                               }}
-                              placeholder={isSearching ? "Search other catalogs..." : "Ask questions about this catalog..."}
+                              placeholder={isSearchMode ? "Search other catalogs..." : "Ask questions about this catalog or request changes..."}
                              className="flex-1 min-h-[60px] px-3 py-2 bg-black/40 text-white border border-neo-border resize-none focus:outline-none focus:ring-2 focus:ring-neo-accent"
                              disabled={isChatLoading}
                          />
                          <button
-                             onClick={() => isSearching ? searchCatalogs() : sendChatMessage()}
+                             onClick={() => isSearchMode ? searchCatalogs() : sendChatMessage()}
                              disabled={isChatLoading || !chatInput.trim()}
                              className={`px-4 py-2 bg-neo-accent text-black font-display font-bold uppercase tracking-wider transition-colors hover:bg-white hover:text-black disabled:opacity-50`}
                          >
-                             {isChatLoading ? (isSearching ? 'Searching...' : 'Sending...') : (isSearching ? 'Search' : 'Send')}
+                             {isChatLoading ? (isSearchMode ? 'Searching...' : 'Sending...') : (isSearchMode ? 'Search' : 'Send')}
                          </button>
                      </div>
                  </div>
