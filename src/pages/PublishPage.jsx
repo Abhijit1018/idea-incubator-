@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../lib/AuthContext';
 import { authFetch } from '../lib/api';
+import { PublishCardSkeleton } from '../components/SkeletonLoaders';
 
 /* ─── Tag Input ─── */
 function TagInput({ tags, setTags }) {
@@ -50,13 +51,8 @@ function TagInput({ tags, setTags }) {
           className="input-editorial flex-1"
           maxLength={30}
         />
-        <button
-          type="button"
-          onClick={addTag}
-          disabled={!input.trim() || tags.length >= 8}
-          className="btn-secondary px-4 py-2 disabled:opacity-30"
-        >
-          <Tag size={14} />
+        <button onClick={addTag} className="px-4 py-2 rounded-xl bg-mi-surface border border-mi-border text-mi-text-muted hover:text-white hover:border-mi-border-light transition-all font-body text-xs">
+          <Tag size={13} />
         </button>
       </div>
       <p className="text-xs text-mi-text-muted font-body mt-1">{tags.length}/8 tags</p>
@@ -64,8 +60,65 @@ function TagInput({ tags, setTags }) {
   );
 }
 
+/* ─── Visibility Settings ─── */
+const VISIBILITY_FIELDS = [
+  { key: 'summary', label: 'Summary' },
+  { key: 'tech_stack', label: 'Tech Stack' },
+  { key: 'pros_cons', label: 'Pros & Cons' },
+  { key: 'similar_tools', label: 'Similar Tools' },
+  { key: 'mermaid_syntax', label: 'Architecture Diagram' },
+  { key: 'image_url', label: 'Concept Image' },
+  { key: 'market_trend', label: 'Market Trend' },
+  { key: 'unique_features', label: 'Unique Features' },
+];
+
+function VisibilitySettings({ visibleFields, onChange }) {
+  const toggleField = (key) => {
+    if (visibleFields.includes(key)) {
+      onChange(visibleFields.filter(f => f !== key));
+    } else {
+      onChange([...visibleFields, key]);
+    }
+  };
+
+  return (
+    <div className="mt-4 p-4 bg-mi-bg/50 border border-mi-border rounded-xl">
+      <div className="flex items-center gap-2 mb-3">
+        <Eye size={14} className="text-mi-accent" />
+        <span className="text-xs font-body font-semibold text-mi-text-secondary tracking-wide uppercase">Visibility Settings</span>
+      </div>
+      <p className="text-xs text-mi-text-muted font-body mb-3">Choose which sections the community can see</p>
+      <div className="grid grid-cols-2 gap-2">
+        {VISIBILITY_FIELDS.map(({ key, label }) => (
+          <label key={key} className="flex items-center gap-2 cursor-pointer group">
+            <input
+              type="checkbox"
+              checked={visibleFields.includes(key)}
+              onChange={() => toggleField(key)}
+              className="w-4 h-4 rounded border-mi-border text-mi-accent bg-mi-surface focus:ring-mi-accent/30"
+            />
+            <span className={`text-xs font-body transition-colors ${
+              visibleFields.includes(key) ? 'text-white' : 'text-mi-text-muted'
+            }`}>{label}</span>
+          </label>
+        ))}
+      </div>
+      <div className="flex items-center gap-3 mt-3">
+        <button
+          onClick={() => onChange(VISIBILITY_FIELDS.map(f => f.key))}
+          className="text-[10px] text-mi-accent font-body hover:underline"
+        >Show all</button>
+        <button
+          onClick={() => onChange(['summary'])}
+          className="text-[10px] text-mi-text-muted font-body hover:underline"
+        >Summary only</button>
+      </div>
+    </div>
+  );
+}
+
 /* ─── Publish Card ─── */
-function PublishCard({ entry, onPublish, onUnpublish, publishing }) {
+function PublishCard({ entry, onPublish, onUnpublish, publishing, visibleFields, onVisibilityChange }) {
   const isPublished = entry.visibility === 'public';
   const isPending = entry.status === 'pending';
   const isFailed = entry.status === 'failed';
@@ -156,6 +209,14 @@ function PublishCard({ entry, onPublish, onUnpublish, publishing }) {
           )}
         </div>
       </div>
+
+      {/* Visibility settings — show for completed unpublished entries */}
+      {entry.status === 'completed' && !isPublished && (
+        <VisibilitySettings
+          visibleFields={visibleFields}
+          onChange={onVisibilityChange}
+        />
+      )}
     </motion.div>
   );
 }
@@ -170,7 +231,8 @@ export default function PublishPage() {
   const [publishing, setPublishing] = useState(null);
   const [successMsg, setSuccessMsg] = useState('');
   const [tags, setTags] = useState([]);
-  const [filterStatus, setFilterStatus] = useState('all'); // all | published | draft
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [visibilityMap, setVisibilityMap] = useState({}); // { entryId: ['summary', 'tech_stack', ...] }
 
   useEffect(() => {
     fetchEntries();
@@ -194,12 +256,16 @@ export default function PublishPage() {
     setPublishing(entryId);
     setSuccessMsg('');
     try {
+      const visFields = visibilityMap[entryId] || VISIBILITY_FIELDS.map(f => f.key);
       const res = await authFetch(`/api/catalogs/${entryId}/publish`, {
         method: 'POST',
-        body: JSON.stringify({ tags: tags.length > 0 ? tags : null }),
+        body: JSON.stringify({
+          tags: tags.length > 0 ? tags : null,
+          visible_fields: visFields,
+        }),
       });
       if (res.ok) {
-        setSuccessMsg('Idea published to the community! 🎉');
+        setSuccessMsg('Idea published to the community!');
         setTags([]);
         fetchEntries();
       }
@@ -329,8 +395,8 @@ export default function PublishPage() {
 
         {/* ── Entry List ── */}
         {loading ? (
-          <div className="flex justify-center py-20">
-            <div className="w-10 h-10 border-2 border-mi-border border-t-mi-accent rounded-full animate-spin" />
+          <div className="space-y-3">
+            {Array.from({ length: 4 }).map((_, i) => <PublishCardSkeleton key={i} />)}
           </div>
         ) : filteredEntries.length === 0 ? (
           <motion.div
@@ -361,6 +427,8 @@ export default function PublishPage() {
                 onPublish={handlePublish}
                 onUnpublish={handleUnpublish}
                 publishing={publishing}
+                visibleFields={visibilityMap[entry.id] || VISIBILITY_FIELDS.map(f => f.key)}
+                onVisibilityChange={(fields) => setVisibilityMap(prev => ({ ...prev, [entry.id]: fields }))}
               />
             ))}
           </div>

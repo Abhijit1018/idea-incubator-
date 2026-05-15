@@ -1,21 +1,24 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Search, TrendingUp, Clock, Sparkles, MessageSquare,
-  Heart, Share2, ArrowUpRight, Lightbulb, Wrench,
-  Users, Bookmark, MoreHorizontal, Send, X, ChevronDown, Flame, Handshake, Check
+  Search, TrendingUp, Clock, Sparkles, MessageSquare, Heart, Share2, ArrowUpRight, Lightbulb, Wrench,
+  Users, Bookmark, MoreHorizontal, Send, X, ChevronDown, Flame, Handshake, Check,
+  Eye, DollarSign, Hammer, Trophy, Download, Camera, Layout, Loader2
 } from 'lucide-react';
+import html2canvas from 'html2canvas';
 import { authFetch } from '../lib/api';
 import { useAuth } from '../lib/AuthContext';
 import ConnectModal from '../components/ConnectModal';
+import { PostCardSkeleton } from '../components/SkeletonLoaders';
+import EmptyState from '../components/EmptyState';
 
 const REACTION_CONFIG = [
-  { type: 'brilliant', emoji: '💡', label: 'Brilliant' },
-  { type: 'interested', emoji: '👀', label: 'Interested' },
-  { type: 'sellable', emoji: '💰', label: 'Sellable' },
-  { type: 'build_worthy', emoji: '🔨', label: 'Build-worthy' },
-  { type: 'needs_work', emoji: '🔧', label: 'Needs work' },
+  { type: 'brilliant', icon: Lightbulb, label: 'Brilliant', color: 'text-yellow-400' },
+  { type: 'interested', icon: Eye, label: 'Interested', color: 'text-blue-400' },
+  { type: 'sellable', icon: DollarSign, label: 'Sellable', color: 'text-green-400' },
+  { type: 'build_worthy', icon: Hammer, label: 'Build-worthy', color: 'text-orange-400' },
+  { type: 'needs_work', icon: Wrench, label: 'Needs work', color: 'text-mi-text-muted' },
 ];
 
 /* ─── Comment Thread ─── */
@@ -207,8 +210,200 @@ function UpdatesSection({ entryId, isOpen, onClose }) {
   );
 }
 
+/* ─── Social Share Modal ─── */
+function SocialShareModal({ entry, isOpen, onClose }) {
+  const cardRef = useRef(null);
+  const [downloading, setDownloading] = useState(false);
+
+  const handleDownload = async () => {
+    if (!cardRef.current) return;
+    setDownloading(true);
+    try {
+      const canvas = await html2canvas(cardRef.current, {
+        backgroundColor: '#0a0a0b',
+        scale: 2,
+        logging: false,
+        useCORS: true
+      });
+      const link = document.createElement('a');
+      link.download = `mindinspo-${entry.id.substring(0, 8)}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    } catch (e) {
+      console.error('Download failed', e);
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+      <motion.div 
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        onClick={onClose}
+        className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+      />
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.9, y: 20 }}
+        className="relative z-10 w-full max-w-lg bg-mi-surface border border-mi-border rounded-3xl overflow-hidden shadow-2xl"
+      >
+        <div className="p-6 border-b border-mi-border flex items-center justify-between">
+          <h3 className="font-heading text-sm tracking-widest text-white uppercase">Export to Image</h3>
+          <button onClick={onClose} className="text-mi-text-muted hover:text-white transition-colors">
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="p-8 flex flex-col items-center">
+          {/* The Shareable Card */}
+          <div 
+            ref={cardRef}
+            className="w-full aspect-[4/5] bg-mi-bg p-8 rounded-2xl border border-mi-border relative overflow-hidden flex flex-col"
+          >
+            {/* Design elements for the shared image */}
+            <div className="absolute top-0 right-0 w-32 h-32 bg-mi-accent/10 rounded-full blur-3xl" />
+            <div className="absolute bottom-0 left-0 w-32 h-32 bg-purple-500/10 rounded-full blur-3xl" />
+            
+            <div className="relative z-10 flex-1">
+              <div className="flex items-center gap-2 mb-6">
+                <div className="w-8 h-8 rounded-lg bg-mi-accent flex items-center justify-center">
+                  <Flame size={16} className="text-white" />
+                </div>
+                <span className="font-heading text-lg tracking-widest text-white uppercase">MindInspo</span>
+              </div>
+
+              <div className="section-label mb-2">New {entry.input_type} concept</div>
+              <h2 className="font-heading text-3xl text-white leading-tight mb-4">{entry.raw_input}</h2>
+              <p className="font-body text-mi-text-secondary text-sm leading-relaxed line-clamp-6 mb-6">
+                {entry.summary || "A new vision for the future of building."}
+              </p>
+
+              {entry.tech_stack?.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-6">
+                  {entry.tech_stack.slice(0, 4).map((t, i) => (
+                    <span key={i} className="px-3 py-1 bg-white/5 border border-mi-border rounded-full text-[10px] font-body text-mi-text-muted">
+                      {t}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-auto pt-6 border-t border-mi-border/50 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-full bg-mi-accent/20 flex items-center justify-center text-[8px] text-mi-accent font-heading">
+                  {(entry.author?.name || 'U')[0].toUpperCase()}
+                </div>
+                <span className="text-[10px] text-mi-text-muted font-body">by {entry.author?.name || 'Builder'}</span>
+              </div>
+              <span className="text-[10px] text-mi-accent font-body tracking-wider uppercase">mindinspo.com</span>
+            </div>
+          </div>
+
+          <button 
+            onClick={handleDownload}
+            disabled={downloading}
+            className="w-full mt-8 btn-primary justify-center py-4 text-base"
+          >
+            {downloading ? <Loader2 size={20} className="animate-spin" /> : <Download size={20} />}
+            {downloading ? 'Generating Image...' : 'Download Image'}
+          </button>
+          <p className="mt-4 text-xs text-mi-text-muted font-body text-center">
+            Perfect for sharing on X (Twitter), LinkedIn, or Instagram.
+          </p>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+/* ─── Trending Sidebar ─── */
+function TrendingSidebar({ entries, leaderboard, loading }) {
+  const trendingIdeas = [...entries]
+    .sort((a, b) => (b.idea_score || 0) - (a.idea_score || 0))
+    .slice(0, 5);
+
+  const colors = ['bg-blue-500', 'bg-mi-accent', 'bg-purple-500', 'bg-green-500', 'bg-orange-500'];
+
+  return (
+    <div className="space-y-8">
+      {/* Trending Ideas */}
+      <div className="bg-mi-surface/30 border border-mi-border rounded-2xl p-5 backdrop-blur-sm">
+        <div className="flex items-center gap-2 mb-4">
+          <Flame size={16} className="text-mi-accent" />
+          <h4 className="font-heading text-xs tracking-[0.2em] text-white uppercase">Trending Ideas</h4>
+        </div>
+        <div className="space-y-4">
+          {trendingIdeas.map((idea, i) => (
+            <Link 
+              key={idea.id} 
+              to={`/community?post=${idea.id}`}
+              className="block group"
+            >
+              <div className="flex items-start gap-3">
+                <span className="font-heading text-lg text-mi-text-muted group-hover:text-mi-accent transition-colors">0{i+1}</span>
+                <div className="min-w-0">
+                  <p className="font-body text-sm text-white font-medium truncate group-hover:text-mi-accent transition-colors">{idea.raw_input}</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-[10px] text-mi-text-muted font-body uppercase tracking-wider">{idea.input_type}</span>
+                    <span className="text-[10px] text-mi-text-muted">·</span>
+                    <span className="flex items-center gap-1 text-[10px] text-yellow-500 font-body">
+                      <Flame size={10} />
+                      {idea.idea_score}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </Link>
+          ))}
+        </div>
+      </div>
+
+      {/* Leaderboard */}
+      <div className="bg-mi-surface/30 border border-mi-border rounded-2xl p-5 backdrop-blur-sm">
+        <div className="flex items-center gap-2 mb-4">
+          <Trophy size={16} className="text-yellow-500" />
+          <h4 className="font-heading text-xs tracking-[0.2em] text-white uppercase">Top Builders</h4>
+        </div>
+        <div className="space-y-4">
+          {loading ? (
+            <div className="flex justify-center py-4">
+              <div className="w-5 h-5 border-2 border-mi-border border-t-mi-accent rounded-full animate-spin" />
+            </div>
+          ) : leaderboard.length === 0 ? (
+            <p className="text-[10px] text-mi-text-muted font-body text-center py-2">No builders yet.</p>
+          ) : (
+            leaderboard.slice(0, 5).map((builder, i) => (
+              <Link key={builder.id} to={`/profile/${builder.id}`} className="flex items-center gap-3 group">
+                <div className={`w-8 h-8 rounded-full ${colors[i % colors.length]} flex items-center justify-center text-[10px] font-heading text-white shrink-0 overflow-hidden`}>
+                  {builder.avatar_url ? (
+                    <img src={builder.avatar_url} className="w-full h-full object-cover" />
+                  ) : (
+                    builder.name[0].toUpperCase()
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="font-body text-xs text-white font-medium truncate group-hover:text-mi-accent transition-colors">{builder.name}</p>
+                  <p className="font-body text-[10px] text-mi-text-muted">{builder.published_count} projects · {builder.score} pts</p>
+                </div>
+              </Link>
+            ))
+          )}
+        </div>
+        <Link to="/community" className="block w-full mt-4 py-2 text-[10px] font-heading tracking-widest text-mi-accent border border-mi-accent/20 rounded-lg hover:bg-mi-accent/10 transition-all uppercase text-center">
+          Community Stats
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 /* ─── Post Card (Twitter-like) ─── */
-function PostCard({ entry, index, onLike, onBookmark, onReact, onOpenConnect }) {
+function PostCard({ entry, index, onLike, onBookmark, onReact, onOpenConnect, onShare }) {
   const { isAuthenticated, user } = useAuth();
   const [showComments, setShowComments] = useState(false);
   const [showUpdates, setShowUpdates] = useState(false);
@@ -237,12 +432,15 @@ function PostCard({ entry, index, onLike, onBookmark, onReact, onOpenConnect }) 
   const authorInitial = authorName[0].toUpperCase();
   const totalReactions = entry.reactions ? Object.values(entry.reactions).reduce((a, b) => a + b, 0) : 0;
 
+  const [showShare, setShowShare] = useState(false);
+
   return (
     <motion.article
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
+      whileHover={{ y: -4, border: '1px solid rgba(139, 92, 246, 0.3)', boxShadow: '0 20px 40px -20px rgba(0,0,0,0.5)' }}
       transition={{ delay: index * 0.05, duration: 0.4 }}
-      className="relative bg-mi-surface border border-mi-border rounded-2xl overflow-hidden hover:border-mi-border-light transition-all duration-300 group"
+      className="relative bg-mi-surface border border-mi-border rounded-2xl overflow-hidden transition-all duration-300 group"
     >
       {/* Card header */}
       <div className="p-5 pb-0">
@@ -275,8 +473,14 @@ function PostCard({ entry, index, onLike, onBookmark, onReact, onOpenConnect }) 
               }`}>
                 {entry.input_type === 'tool' ? 'Tool' : 'Idea'}
               </span>
-              {entry.tags?.length > 0 && entry.tags.slice(0, 2).map((tag, i) => (
-                <span key={i} className="text-xs text-mi-text-muted font-body">#{tag}</span>
+              {entry.tags?.length > 0 && entry.tags.slice(0, 3).map((tag, i) => (
+                <button 
+                  key={i} 
+                  onClick={(e) => { e.stopPropagation(); setSearchQuery(tag); }}
+                  className="text-xs text-mi-accent hover:underline font-body"
+                >
+                  #{tag}
+                </button>
               ))}
               {entry.updates_count > 0 && (
                 <span className="text-xs text-mi-text-muted font-body">· {entry.updates_count} updates</span>
@@ -336,7 +540,7 @@ function PostCard({ entry, index, onLike, onBookmark, onReact, onOpenConnect }) 
                 }`}
                 title={r.label}
               >
-                <span>{r.emoji}</span>
+                <r.icon size={13} className={isActive ? r.color : ''} />
                 {count > 0 && <span>{count}</span>}
               </button>
             );
@@ -382,7 +586,7 @@ function PostCard({ entry, index, onLike, onBookmark, onReact, onOpenConnect }) 
             }`}
             title="React"
           >
-            <Sparkles size={15} />
+            <Flame size={15} />
             <span>{totalReactions}</span>
           </button>
           {isAuthenticated && !isOwner && (
@@ -419,6 +623,12 @@ function PostCard({ entry, index, onLike, onBookmark, onReact, onOpenConnect }) 
           >
             {copied ? <Check size={15} className="text-green-400" /> : <Share2 size={15} />}
           </button>
+          <button
+            onClick={() => onShare(entry)}
+            className="p-1.5 rounded-lg text-mi-text-muted hover:text-mi-accent transition-colors" title="Export as image"
+          >
+            <Camera size={15} />
+          </button>
         </div>
       </div>
 
@@ -447,6 +657,9 @@ export default function CommunityPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [connectModal, setConnectModal] = useState({ open: false, entryId: null, ideaTitle: '' });
+  const [leaderboard, setLeaderboard] = useState([]);
+  const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
+  const [shareEntry, setShareEntry] = useState(null);
 
   const fetchFeed = useCallback(async () => {
     setLoading(true);
@@ -464,15 +677,39 @@ export default function CommunityPage() {
     finally { setLoading(false); }
   }, [page, sortBy, filterType, searchQuery]);
 
+  const fetchLeaderboard = useCallback(async () => {
+    setLoadingLeaderboard(true);
+    try {
+      const res = await authFetch('/api/community/leaderboard');
+      if (res.ok) setLeaderboard(await res.json());
+    } catch (e) { console.error('Failed to fetch leaderboard', e); }
+    finally { setLoadingLeaderboard(false); }
+  }, []);
+
   useEffect(() => { fetchFeed(); }, [fetchFeed]);
+  useEffect(() => { fetchLeaderboard(); }, [fetchLeaderboard]);
   useEffect(() => { setPage(1); }, [searchQuery, sortBy, filterType]);
 
   const handleLike = async (entryId) => {
     if (!isAuthenticated) return;
+    
+    // Optimistic UI Update
+    setEntries(prev => prev.map(e => {
+      if (e.id === entryId) {
+        return {
+          ...e,
+          liked_by_user: !e.liked_by_user,
+          like_count: e.liked_by_user ? Math.max(0, (e.like_count || 0) - 1) : (e.like_count || 0) + 1
+        };
+      }
+      return e;
+    }));
+
     try {
       const res = await authFetch(`/api/community/${entryId}/like`, { method: 'POST' });
       if (res.ok) {
         const data = await res.json();
+        // Sync with exact server count if needed
         setEntries(prev => prev.map(e => e.id === entryId ? { ...e, liked_by_user: data.liked, like_count: data.like_count } : e));
       }
     } catch (e) { console.error(e); }
@@ -480,6 +717,10 @@ export default function CommunityPage() {
 
   const handleBookmark = async (entryId) => {
     if (!isAuthenticated) return;
+
+    // Optimistic UI Update
+    setEntries(prev => prev.map(e => e.id === entryId ? { ...e, bookmarked_by_user: !e.bookmarked_by_user } : e));
+
     try {
       const res = await authFetch(`/api/community/${entryId}/bookmark`, { method: 'POST' });
       if (res.ok) {
@@ -491,6 +732,26 @@ export default function CommunityPage() {
 
   const handleReact = async (entryId, reactionType) => {
     if (!isAuthenticated) return;
+    
+    // Optimistic UI Update
+    setEntries(prev => prev.map(e => {
+      if (e.id === entryId) {
+        const hasReacted = (e.user_reactions || []).includes(reactionType);
+        const newUserReactions = hasReacted 
+          ? (e.user_reactions || []).filter(r => r !== reactionType)
+          : [...(e.user_reactions || []), reactionType];
+          
+        const currentCount = e.reactions?.[reactionType] || 0;
+        const newReactions = {
+          ...(e.reactions || {}),
+          [reactionType]: hasReacted ? Math.max(0, currentCount - 1) : currentCount + 1
+        };
+        
+        return { ...e, user_reactions: newUserReactions, reactions: newReactions };
+      }
+      return e;
+    }));
+
     try {
       const res = await authFetch(`/api/community/${entryId}/react`, {
         method: 'POST',
@@ -506,9 +767,12 @@ export default function CommunityPage() {
   };
 
   return (
-    <div className="pt-24 pb-16">
-      <div className="max-w-[1400px] mx-auto px-6 lg:px-10">
+    <div className="pt-24 pb-16 relative overflow-hidden min-h-screen">
+      {/* Ambient Background Orbs */}
+      <div className="absolute -top-20 left-1/4 w-[500px] h-[500px] bg-mi-accent/10 rounded-full blur-[120px] pointer-events-none animate-pulse" style={{ animationDuration: '4s' }} />
+      <div className="absolute top-40 right-1/4 w-[400px] h-[400px] bg-purple-500/10 rounded-full blur-[100px] pointer-events-none" style={{ animation: 'pulse 5s cubic-bezier(0.4, 0, 0.6, 1) infinite' }} />
 
+      <div className="max-w-[1400px] mx-auto px-6 lg:px-10 relative z-10">
         {/* ── Hero Header ── */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -527,15 +791,19 @@ export default function CommunityPage() {
               </p>
             </div>
             {isAuthenticated ? (
-              <Link to="/publish" className="btn-primary shrink-0">
-                <Sparkles size={16} />
-                Publish Your Idea
-              </Link>
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                <Link to="/publish" className="btn-primary shrink-0">
+                  <Flame size={16} />
+                  Publish Your Idea
+                </Link>
+              </motion.div>
             ) : (
-              <Link to="/login?mode=register" className="btn-primary shrink-0">
-                <ArrowUpRight size={16} />
-                Join Community
-              </Link>
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                <Link to="/login?mode=register" className="btn-primary shrink-0">
+                  <ArrowUpRight size={16} />
+                  Join Community
+                </Link>
+              </motion.div>
             )}
           </div>
         </motion.div>
@@ -609,39 +877,35 @@ export default function CommunityPage() {
           </div>
         </motion.div>
 
-        {/* ── Feed ── */}
-        <div className="max-w-2xl mx-auto">
-          {loading ? (
-            <div className="flex justify-center py-20">
-              <div className="w-10 h-10 border-2 border-mi-border border-t-mi-accent rounded-full animate-spin" />
+        {/* ── Feed & Sidebar ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr,320px] gap-10 items-start">
+          {/* Main Feed */}
+          <div>
+            {loading ? (
+            <div className="space-y-4">
+              {Array.from({ length: 4 }).map((_, i) => <PostCardSkeleton key={i} />)}
             </div>
           ) : entries.length === 0 ? (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="text-center py-20"
-            >
-              <Users size={40} className="mx-auto text-mi-text-muted mb-4" />
-              <p className="font-heading text-2xl text-mi-text-muted tracking-wide mb-2">
-                {searchQuery ? 'NO RESULTS FOUND' : 'NO IDEAS YET'}
-              </p>
-              <p className="font-body text-sm text-mi-text-muted mb-6">
-                {searchQuery
+            <div className="py-10 border border-dashed border-mi-border bg-mi-surface/50 rounded-2xl">
+              <EmptyState 
+                icon={Users}
+                title={searchQuery ? 'NO RESULTS FOUND' : 'NO IDEAS YET'}
+                description={searchQuery
                   ? 'Try a different search term.'
                   : 'Be the first to share your idea with the community!'}
-              </p>
-              {isAuthenticated ? (
-                <Link to="/publish" className="btn-primary">
-                  <Sparkles size={16} />
-                  Publish an Idea
-                </Link>
-              ) : (
-                <Link to="/login?mode=register" className="btn-primary">
-                  <ArrowUpRight size={16} />
-                  Get Started
-                </Link>
-              )}
-            </motion.div>
+                action={isAuthenticated ? (
+                  <Link to="/publish" className="btn-primary mt-4">
+                    <Flame size={16} />
+                    Publish an Idea
+                  </Link>
+                ) : (
+                  <Link to="/login?mode=register" className="btn-primary mt-4">
+                    <ArrowUpRight size={16} />
+                    Get Started
+                  </Link>
+                )}
+              />
+            </div>
           ) : (
             <>
               <div className="space-y-4">
@@ -654,6 +918,7 @@ export default function CommunityPage() {
                     onBookmark={handleBookmark}
                     onReact={handleReact}
                     onOpenConnect={(e) => setConnectModal({ open: true, entryId: e.id, ideaTitle: e.raw_input })}
+                    onShare={(e) => setShareEntry(e)}
                   />
                 ))}
               </div>
@@ -678,6 +943,12 @@ export default function CommunityPage() {
               )}
             </>
           )}
+          </div>
+
+          {/* Sidebar */}
+          <aside className="hidden lg:block sticky top-24 space-y-8">
+            <TrendingSidebar entries={entries} leaderboard={leaderboard} loading={loadingLeaderboard} />
+          </aside>
         </div>
       </div>
 
@@ -688,6 +959,16 @@ export default function CommunityPage() {
         entryId={connectModal.entryId}
         ideaTitle={connectModal.ideaTitle}
       />
+
+      <AnimatePresence>
+        {shareEntry && (
+          <SocialShareModal 
+            entry={shareEntry} 
+            isOpen={!!shareEntry} 
+            onClose={() => setShareEntry(null)} 
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

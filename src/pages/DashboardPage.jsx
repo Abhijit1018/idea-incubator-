@@ -4,13 +4,15 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Lightbulb, Wrench, Clock, CheckCircle2, AlertTriangle, Search,
   ArrowUpRight, Plus, TrendingUp, Sparkles, Zap, ArrowRight,
-  BarChart3, Activity, Eye, Filter, LayoutGrid, List, Handshake, Check, X as X2, Loader2
+  BarChart3, Activity, Eye, Filter, LayoutGrid, List, Handshake, Check, X as X2, Loader2, Inbox
 } from 'lucide-react';
+import { CatalogCardSkeleton, StatCardSkeleton } from '../components/SkeletonLoaders';
 import { useAuth } from '../lib/AuthContext';
 import { authFetch } from '../lib/api';
 import CatalogCard from '../components/CatalogCard';
 import IdeaDetail from '../components/IdeaDetail';
 import IdeaInput from '../components/IdeaInput';
+import EmptyState from '../components/EmptyState';
 
 /* ─── Stat Card ─── */
 function StatCard({ icon: Icon, label, value, accent, delay = 0 }) {
@@ -88,6 +90,8 @@ export default function DashboardPage() {
   const [filterStatus, setFilterStatus] = useState('all');
   const [showInput, setShowInput] = useState(false);
   const [incomingRequests, setIncomingRequests] = useState([]);
+  const [sentRequests, setSentRequests] = useState([]);
+  const [requestTab, setRequestTab] = useState('incoming');
   const [respondingTo, setRespondingTo] = useState(null);
 
   const displayName = user?.user_metadata?.name || user?.email?.split('@')[0] || 'Builder';
@@ -95,14 +99,21 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchCatalogs();
     fetchRequests();
-    const interval = setInterval(fetchCatalogs, 5000);
+    const interval = setInterval(() => {
+      fetchCatalogs();
+      fetchRequests();
+    }, 10000); // 10s polling
     return () => clearInterval(interval);
   }, [searchQuery]);
 
   const fetchRequests = async () => {
     try {
-      const res = await authFetch('/api/connect/requests');
-      if (res.ok) setIncomingRequests(await res.json());
+      const [incRes, sentRes] = await Promise.all([
+        authFetch('/api/connect/requests'),
+        authFetch('/api/connect/sent')
+      ]);
+      if (incRes.ok) setIncomingRequests(await incRes.json());
+      if (sentRes.ok) setSentRequests(await sentRes.json());
     } catch (e) { console.error(e); }
   };
 
@@ -202,8 +213,12 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="pt-24 pb-16">
-      <div className="max-w-[1400px] mx-auto px-6 lg:px-10">
+    <div className="pt-24 pb-16 relative overflow-hidden min-h-screen">
+      {/* Ambient Background Orbs */}
+      <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-mi-accent/5 rounded-full blur-[120px] pointer-events-none animate-pulse" style={{ animationDuration: '6s' }} />
+      <div className="absolute top-40 left-0 w-[400px] h-[400px] bg-blue-500/5 rounded-full blur-[100px] pointer-events-none" style={{ animation: 'pulse 5s cubic-bezier(0.4, 0, 0.6, 1) infinite' }} />
+
+      <div className="max-w-[1400px] mx-auto px-6 lg:px-10 relative z-10">
 
         {/* ── Header ── */}
         <motion.div
@@ -219,13 +234,15 @@ export default function DashboardPage() {
               {displayName.toUpperCase()}
             </h1>
           </div>
-          <button
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
             onClick={() => setShowInput(!showInput)}
             className="btn-primary"
           >
             <Plus size={18} />
             New Idea
-          </button>
+          </motion.button>
         </motion.div>
 
         {/* ── Idea Input Overlay ── */}
@@ -312,29 +329,23 @@ export default function DashboardPage() {
 
             {/* Entries Grid/List */}
             {loading ? (
-              <div className="flex justify-center py-20">
-                <div className="w-10 h-10 border-2 border-mi-border border-t-mi-accent rounded-full animate-spin" />
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {Array.from({ length: 6 }).map((_, i) => <CatalogCardSkeleton key={i} />)}
               </div>
             ) : filteredEntries.length === 0 ? (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="text-center py-20 rounded-2xl border border-dashed border-mi-border bg-mi-surface/50"
-              >
-                <Lightbulb size={40} className="mx-auto text-mi-text-muted mb-4" />
-                <p className="font-heading text-2xl text-mi-text-muted tracking-wide mb-2">NO IDEAS YET</p>
-                <p className="font-body text-sm text-mi-text-muted mb-6">
-                  {filterStatus !== 'all'
-                    ? `No ${filterStatus} ideas found.`
-                    : 'Start by dropping your first idea above.'}
-                </p>
-                {filterStatus === 'all' && (
-                  <button onClick={() => setShowInput(true)} className="btn-primary">
-                    <Plus size={16} />
-                    Drop Your First Idea
-                  </button>
-                )}
-              </motion.div>
+              <div className="py-10 rounded-2xl border border-dashed border-mi-border bg-mi-surface/50">
+                <EmptyState 
+                  icon={Lightbulb}
+                  title="NO IDEAS YET"
+                  description={filterStatus !== 'all' ? `No ${filterStatus} ideas found.` : 'Start by dropping your first idea above.'}
+                  action={filterStatus === 'all' && (
+                    <button onClick={() => setShowInput(true)} className="btn-primary mt-4">
+                      <Plus size={16} />
+                      Drop Your First Idea
+                    </button>
+                  )}
+                />
+              </div>
             ) : viewMode === 'grid' ? (
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
                 {filteredEntries.map((entry, index) => (
@@ -424,64 +435,114 @@ export default function DashboardPage() {
                   ))}
                 </div>
               ) : (
-                <p className="font-body text-sm text-mi-text-muted text-center py-4">No activity yet</p>
+                <EmptyState 
+                  icon={Activity} 
+                  title="Quiet here..." 
+                  description="No recent activity to show." 
+                />
               )}
             </div>
 
             {/* Collaboration Requests */}
             <div className="p-6 rounded-2xl bg-mi-surface border border-mi-border">
-              <div className="flex items-center gap-2 mb-5">
-                <Handshake size={16} className="text-mi-accent" />
-                <h3 className="font-heading text-lg tracking-wide text-white">REQUESTS</h3>
-                {incomingRequests.filter(r => r.status === 'pending').length > 0 && (
-                  <span className="ml-auto px-2 py-0.5 bg-mi-accent rounded-full text-[10px] font-body font-bold text-white">
-                    {incomingRequests.filter(r => r.status === 'pending').length}
-                  </span>
-                )}
+              <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center gap-2">
+                  <Handshake size={16} className="text-mi-accent" />
+                  <h3 className="font-heading text-lg tracking-wide text-white">PARTNERSHIPS</h3>
+                </div>
+                <div className="flex bg-mi-bg/50 rounded-lg p-0.5 border border-mi-border">
+                  <button 
+                    onClick={() => setRequestTab('incoming')}
+                    className={`px-3 py-1 text-[10px] font-heading tracking-wider rounded-md transition-all ${requestTab === 'incoming' ? 'bg-mi-accent text-white shadow-lg' : 'text-mi-text-muted hover:text-white'}`}
+                  >
+                    INCOMING
+                  </button>
+                  <button 
+                    onClick={() => setRequestTab('sent')}
+                    className={`px-3 py-1 text-[10px] font-heading tracking-wider rounded-md transition-all ${requestTab === 'sent' ? 'bg-mi-accent text-white shadow-lg' : 'text-mi-text-muted hover:text-white'}`}
+                  >
+                    SENT
+                  </button>
+                </div>
               </div>
-              {incomingRequests.length === 0 ? (
-                <p className="font-body text-sm text-mi-text-muted text-center py-4">No requests yet</p>
-              ) : (
-                <div className="space-y-3 max-h-[350px] overflow-y-auto">
-                  {incomingRequests.slice(0, 10).map((req) => (
-                    <div key={req.id} className={`p-3 rounded-xl border transition-all ${
-                      req.status === 'pending' ? 'border-mi-accent/20 bg-mi-accent/[0.03]' : 'border-mi-border bg-mi-bg/50'
-                    }`}>
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <div className="w-6 h-6 rounded-full bg-gradient-to-br from-mi-accent/40 to-orange-600/40 flex items-center justify-center shrink-0">
-                          <span className="text-[10px] text-white font-heading">{(req.requester?.name || '?')[0].toUpperCase()}</span>
-                        </div>
-                        <span className="font-body text-xs text-white font-medium truncate">{req.requester?.name || 'Unknown'}</span>
-                        <span className={`ml-auto px-1.5 py-0.5 rounded-md text-[10px] font-body font-medium ${ROLE_COLORS[req.role] || 'text-mi-text-muted bg-white/5'}`}>
-                          {ROLE_LABELS[req.role] || req.role}
-                        </span>
-                      </div>
-                      <p className="font-body text-xs text-mi-text-muted truncate mb-1">{req.idea_title}</p>
-                      {req.message && <p className="font-body text-xs text-mi-text-secondary italic mb-2 line-clamp-2">"{req.message}"</p>}
-                      {req.status === 'pending' ? (
-                        <div className="flex gap-2">
-                          <button onClick={() => handleRespond(req.id, 'accept')} disabled={respondingTo === req.id}
-                            className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg bg-green-500/10 text-green-400 text-xs font-body hover:bg-green-500/20 transition-colors disabled:opacity-50">
-                            {respondingTo === req.id ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />} Accept
-                          </button>
-                          <button onClick={() => handleRespond(req.id, 'decline')} disabled={respondingTo === req.id}
-                            className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg bg-red-500/10 text-red-400 text-xs font-body hover:bg-red-500/20 transition-colors disabled:opacity-50">
-                            <X2 size={12} /> Decline
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <span className={`text-xs font-body ${req.status === 'accepted' ? 'text-green-400' : 'text-mi-text-muted'}`}>
-                            {req.status === 'accepted' ? '✓ Accepted' : '✗ Declined'}
+
+              {requestTab === 'incoming' ? (
+                incomingRequests.length === 0 ? (
+                  <EmptyState icon={Inbox} title="Zero requests" description="You don't have any pending requests." />
+                ) : (
+                  <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1 custom-scrollbar">
+                    {incomingRequests.map((req) => (
+                      <div key={req.id} className={`p-3 rounded-xl border transition-all ${
+                        req.status === 'pending' ? 'border-mi-accent/20 bg-mi-accent/[0.03]' : 'border-mi-border bg-mi-bg/50'
+                      }`}>
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <div className="w-6 h-6 rounded-full bg-gradient-to-br from-mi-accent/40 to-orange-600/40 flex items-center justify-center shrink-0">
+                            <span className="text-[10px] text-white font-heading">{(req.requester?.name || '?')[0].toUpperCase()}</span>
+                          </div>
+                          <span className="font-body text-xs text-white font-medium truncate">{req.requester?.name || 'Unknown'}</span>
+                          <span className={`ml-auto px-1.5 py-0.5 rounded-md text-[10px] font-body font-medium ${ROLE_COLORS[req.role] || 'text-mi-text-muted bg-white/5'}`}>
+                            {ROLE_LABELS[req.role] || req.role}
                           </span>
-                          {req.status === 'accepted' && req.requester?.email && (
-                            <span className="text-xs font-body text-mi-accent truncate">{req.requester.email}</span>
+                        </div>
+                        <p className="font-body text-xs text-mi-text-muted truncate mb-1">{req.idea_title}</p>
+                        {req.message && <p className="font-body text-xs text-mi-text-secondary italic mb-2 line-clamp-2">"{req.message}"</p>}
+                        {req.status === 'pending' ? (
+                          <div className="flex gap-2">
+                            <button onClick={() => handleRespond(req.id, 'accept')} disabled={respondingTo === req.id}
+                              className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg bg-green-500/10 text-green-400 text-xs font-body hover:bg-green-500/20 transition-colors disabled:opacity-50">
+                              {respondingTo === req.id ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />} Accept
+                            </button>
+                            <button onClick={() => handleRespond(req.id, 'decline')} disabled={respondingTo === req.id}
+                              className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg bg-red-500/10 text-red-400 text-xs font-body hover:bg-red-500/20 transition-colors disabled:opacity-50">
+                              <X2 size={12} /> Decline
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <span className={`flex items-center gap-1 text-xs font-body ${req.status === 'accepted' ? 'text-green-400' : 'text-mi-text-muted'}`}>
+                              {req.status === 'accepted' ? <><Check size={12} /> Accepted</> : <><X2 size={12} /> Declined</>}
+                            </span>
+                            {req.status === 'accepted' && req.requester?.email && (
+                              <span className="text-[10px] font-body text-mi-accent truncate">{req.requester.email}</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )
+              ) : (
+                sentRequests.length === 0 ? (
+                  <EmptyState icon={Send} title="No sent requests" description="Explore community to find partners." />
+                ) : (
+                  <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1 custom-scrollbar">
+                    {sentRequests.map((req) => (
+                      <div key={req.id} className="p-3 rounded-xl border border-mi-border bg-mi-bg/50">
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <div className="w-6 h-6 rounded-full bg-white/5 flex items-center justify-center shrink-0 border border-mi-border">
+                            <span className="text-[10px] text-mi-text-muted font-heading">{(req.owner?.name || '?')[0].toUpperCase()}</span>
+                          </div>
+                          <span className="font-body text-xs text-mi-text-muted font-medium truncate">To: {req.owner?.name || 'Owner'}</span>
+                          <span className={`ml-auto px-1.5 py-0.5 rounded-md text-[10px] font-body font-medium ${ROLE_COLORS[req.role] || 'text-mi-text-muted bg-white/5'}`}>
+                            {ROLE_LABELS[req.role] || req.role}
+                          </span>
+                        </div>
+                        <p className="font-body text-xs text-white truncate mb-1">{req.idea_title}</p>
+                        <div className="flex items-center justify-between mt-2">
+                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-heading tracking-wider uppercase ${
+                            req.status === 'pending' ? 'bg-yellow-500/10 text-yellow-400' : 
+                            req.status === 'accepted' ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'
+                          }`}>
+                            {req.status}
+                          </span>
+                          {req.status === 'accepted' && req.owner?.email && (
+                            <span className="text-[10px] font-body text-mi-accent truncate">{req.owner.email}</span>
                           )}
                         </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
+                      </div>
+                    ))}
+                  </div>
+                )
               )}
             </div>
 

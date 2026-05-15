@@ -1,15 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Github, Twitter, ArrowLeft, Lightbulb, Flame, Calendar, ExternalLink } from 'lucide-react';
+import { Github, Twitter, ArrowLeft, Lightbulb, Flame, Calendar, ExternalLink, Eye, DollarSign, Hammer, Wrench } from 'lucide-react';
 import { authFetch } from '../lib/api';
+import { ProfileSkeleton } from '../components/SkeletonLoaders';
 
 const REACTION_LABELS = {
-  brilliant: { emoji: '💡', label: 'Brilliant' },
-  interested: { emoji: '👀', label: 'Interested' },
-  sellable: { emoji: '💰', label: 'Sellable' },
-  build_worthy: { emoji: '🔨', label: 'Build-worthy' },
-  needs_work: { emoji: '🔧', label: 'Needs Work' },
+  brilliant: { icon: Lightbulb, label: 'Brilliant', color: 'text-yellow-400' },
+  interested: { icon: Eye, label: 'Interested', color: 'text-blue-400' },
+  sellable: { icon: DollarSign, label: 'Sellable', color: 'text-green-400' },
+  build_worthy: { icon: Hammer, label: 'Build-worthy', color: 'text-orange-400' },
+  needs_work: { icon: Wrench, label: 'Needs Work', color: 'text-mi-text-muted' },
 };
 
 export default function ProfilePage() {
@@ -31,8 +32,10 @@ export default function ProfilePage() {
 
   if (loading) {
     return (
-      <div className="pt-32 flex justify-center">
-        <div className="w-10 h-10 border-2 border-mi-border border-t-mi-accent rounded-full animate-spin" />
+      <div className="pt-24 pb-16">
+        <div className="max-w-4xl mx-auto px-6 lg:px-10">
+          <ProfileSkeleton />
+        </div>
       </div>
     );
   }
@@ -125,9 +128,9 @@ export default function ProfilePage() {
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="mb-8">
             <h2 className="font-heading text-lg tracking-wide text-white mb-3">REACTION STATS</h2>
             <div className="grid grid-cols-5 gap-3">
-              {Object.entries(REACTION_LABELS).map(([key, { emoji, label }]) => (
+              {Object.entries(REACTION_LABELS).map(([key, { icon: Icon, label, color }]) => (
                 <div key={key} className="bg-mi-surface border border-mi-border rounded-xl p-4 text-center">
-                  <div className="text-2xl mb-1">{emoji}</div>
+                  <div className="flex justify-center mb-1"><Icon size={22} className={color} /></div>
                   <div className="font-heading text-xl text-white">{profile.total_reactions?.[key] || 0}</div>
                   <div className="font-body text-xs text-mi-text-muted mt-0.5">{label}</div>
                 </div>

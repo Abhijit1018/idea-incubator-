@@ -2,13 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../lib/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Menu, X, ArrowUpRight, LogOut, User, Sparkles } from 'lucide-react';
+import { Menu, X, ArrowUpRight, LogOut, User, Settings, ShieldCheck, ChevronDown } from 'lucide-react';
 import NotificationBell from './NotificationBell';
+import { authFetch } from '../lib/api';
 
 function Navbar() {
   const { user, isAuthenticated, signOut } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const location = useLocation();
 
   useEffect(() => {
@@ -20,7 +23,21 @@ function Navbar() {
   // Close mobile menu on route change
   useEffect(() => {
     setMobileOpen(false);
+    setUserDropdownOpen(false);
   }, [location.pathname]);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      authFetch('/api/profile')
+        .then(res => res.ok ? res.json() : null)
+        .then(data => {
+          if (data) setIsAdmin(data.is_admin);
+        })
+        .catch(e => console.error('Failed to fetch admin status', e));
+    } else {
+      setIsAdmin(false);
+    }
+  }, [isAuthenticated]);
 
   const displayName = user?.user_metadata?.name || user?.email?.split('@')[0] || '';
 
@@ -44,9 +61,7 @@ function Navbar() {
           <div className="flex items-center justify-between h-16 lg:h-20">
             {/* Logo */}
             <Link to="/" className="flex items-center gap-2.5 group">
-              <div className="w-8 h-8 bg-mi-accent rounded-lg flex items-center justify-center transition-transform duration-300 group-hover:rotate-12">
-                <Sparkles size={16} className="text-white" />
-              </div>
+              <img src="/mindinspo-logo.svg" alt="MindInspo" className="w-8 h-8 rounded-lg transition-transform duration-300 group-hover:rotate-12" />
               <span className="font-heading text-2xl tracking-wide text-white">
                 MINDINSPO
               </span>
@@ -73,24 +88,51 @@ function Navbar() {
               {isAuthenticated ? (
                 <div className="flex items-center gap-3">
                   <NotificationBell />
-                  <Link
-                    to="/dashboard"
-                    className="flex items-center gap-2 px-4 py-2 rounded-full bg-mi-surface border border-mi-border hover:border-mi-border-light transition-all duration-200"
-                  >
-                    <div className="w-6 h-6 rounded-full bg-mi-accent/20 flex items-center justify-center">
-                      <User size={12} className="text-mi-accent" />
-                    </div>
-                    <span className="text-sm font-body text-mi-text-secondary">
-                      {displayName}
-                    </span>
-                  </Link>
-                  <button
-                    onClick={signOut}
-                    className="p-2.5 rounded-full border border-mi-border text-mi-text-muted hover:text-red-400 hover:border-red-400/50 transition-all duration-200"
-                    title="Sign out"
-                  >
-                    <LogOut size={16} />
-                  </button>
+                  
+                  <div className="relative">
+                    <button
+                      onClick={() => setUserDropdownOpen(!userDropdownOpen)}
+                      className="flex items-center gap-2 px-4 py-2 rounded-full bg-mi-surface border border-mi-border hover:border-mi-border-light transition-all duration-200"
+                    >
+                      <div className="w-6 h-6 rounded-full bg-mi-accent/20 flex items-center justify-center">
+                        <User size={12} className="text-mi-accent" />
+                      </div>
+                      <span className="text-sm font-body text-mi-text-secondary">
+                        {displayName}
+                      </span>
+                      <ChevronDown size={14} className={`text-mi-text-muted transition-transform duration-200 ${userDropdownOpen ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    <AnimatePresence>
+                      {userDropdownOpen && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                          className="absolute right-0 mt-3 w-56 p-2 rounded-2xl glass border border-mi-border/50 shadow-2xl z-50 origin-top-right"
+                        >
+                          <Link to="/dashboard" className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-white/5 transition-colors text-sm font-body text-mi-text-secondary hover:text-white">
+                            <User size={16} /> Dashboard
+                          </Link>
+                          <Link to="/settings" className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-white/5 transition-colors text-sm font-body text-mi-text-secondary hover:text-white">
+                            <Settings size={16} /> Settings
+                          </Link>
+                          {(isAdmin || user?.email === 'abhi@gmail.com') && (
+                            <Link to="/admin" className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-mi-accent/10 transition-colors text-sm font-body text-mi-accent">
+                              <ShieldCheck size={16} /> Admin Console
+                            </Link>
+                          )}
+                          <div className="h-[1px] bg-mi-border/50 my-1 mx-2" />
+                          <button
+                            onClick={signOut}
+                            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-red-400/10 transition-colors text-sm font-body text-red-400"
+                          >
+                            <LogOut size={16} /> Sign Out
+                          </button>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
                 </div>
               ) : (
                 <>
@@ -196,9 +238,7 @@ function Footer() {
         {/* Bottom bar */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 pt-8 border-t border-mi-border">
           <div className="flex items-center gap-2.5">
-            <div className="w-6 h-6 bg-mi-accent rounded-md flex items-center justify-center">
-              <Sparkles size={12} className="text-white" />
-            </div>
+            <img src="/mindinspo-logo.svg" alt="MindInspo" className="w-6 h-6 rounded-md" />
             <span className="font-heading text-lg tracking-wide text-white">MINDINSPO</span>
           </div>
           <div className="flex flex-wrap gap-6 text-sm text-mi-text-muted font-body">

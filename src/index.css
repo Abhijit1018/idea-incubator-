@@ -45,11 +45,24 @@
 
   /* ---- Buttons ---- */
   .btn-primary {
-    @apply inline-flex items-center gap-2 px-7 py-3.5 bg-mi-accent text-white font-body font-semibold text-sm tracking-wide rounded-full transition-all duration-300 hover:bg-mi-accent-hover hover:shadow-glow-accent hover:-translate-y-0.5 active:translate-y-0;
+    @apply inline-flex items-center gap-2 px-7 py-3.5 bg-mi-accent text-white font-body font-semibold text-sm tracking-wide rounded-full transition-all duration-300;
+  }
+  .btn-primary:hover {
+    @apply bg-mi-accent-hover -translate-y-0.5;
+    box-shadow: 0 0 20px rgba(var(--mi-accent-rgb), 0.4), 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+  }
+  .btn-primary:active {
+    @apply translate-y-0 scale-95;
   }
 
   .btn-secondary {
-    @apply inline-flex items-center gap-2 px-7 py-3.5 border border-mi-border text-mi-text font-body font-medium text-sm tracking-wide rounded-full transition-all duration-300 hover:border-mi-text hover:bg-white/5 hover:-translate-y-0.5 active:translate-y-0;
+    @apply inline-flex items-center gap-2 px-7 py-3.5 border border-mi-border text-mi-text font-body font-medium text-sm tracking-wide rounded-full transition-all duration-300;
+  }
+  .btn-secondary:hover {
+    @apply border-mi-border-light bg-white/5 -translate-y-0.5 shadow-lg;
+  }
+  .btn-secondary:active {
+    @apply translate-y-0 scale-95;
   }
 
   .btn-ghost {
@@ -205,4 +218,16 @@
   .stagger-4 { animation-delay: 0.4s; }
   .stagger-5 { animation-delay: 0.5s; }
   .stagger-6 { animation-delay: 0.6s; }
+
+  /* Skeleton loading shimmer */
+  .skeleton {
+    background: linear-gradient(90deg, #1c1c1f 25%, #2a2a2e 50%, #1c1c1f 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s ease-in-out infinite;
+  }
+
+  @keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
 }

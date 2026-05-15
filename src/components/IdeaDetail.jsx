@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import mermaid from 'mermaid';
-import { ArrowLeft, Layers, Zap, AlertTriangle, GitBranch, ArrowRight, CheckCircle2, MessageSquare, Search, Send, Check, X, Pencil } from 'lucide-react';
+import { ArrowLeft, Layers, Zap, AlertTriangle, GitBranch, ArrowRight, CheckCircle2, MessageSquare, Search, Send, Check, X, Pencil, Bot, ChevronDown, ChevronUp, ArrowDown, Globe, Lock, Terminal, HelpCircle } from 'lucide-react';
 import { authFetch } from '../lib/api';
 import ReactMarkdown from 'react-markdown';
 import { useAuth } from '../lib/AuthContext';
@@ -197,7 +197,107 @@ export default function IdeaDetail({ entry, onBack, onEntryUpdate }) {
     const [newUpdateType, setNewUpdateType] = useState('progress');
     const [isPostingUpdate, setIsPostingUpdate] = useState(false);
     const chatEndRef = useRef(null);
+    const chatContainerRef = useRef(null);
     const isOwner = user?.id === entry.user_id;
+    const isCollaborator = entry.collaborators?.some(c => c.id === user?.id);
+    const hasWriteAccess = isOwner || isCollaborator;
+    const [showCommands, setShowCommands] = useState(false);
+    const [expandedMessages, setExpandedMessages] = useState(new Set());
+    const [showScrollBtn, setShowScrollBtn] = useState(false);
+
+    // Slash command definitions
+    const SLASH_COMMANDS = [
+        { cmd: '/post', desc: 'Post a timeline update', example: '/post Added login page', icon: Terminal },
+        { cmd: '/update', desc: 'Update a catalog field', example: '/update summary New text', icon: Pencil },
+        { cmd: '/publish', desc: 'Publish idea to community', example: '/publish', icon: Globe },
+        { cmd: '/unpublish', desc: 'Unpublish from community', example: '/unpublish', icon: Lock },
+        { cmd: '/help', desc: 'Show available commands', example: '/help', icon: HelpCircle },
+    ];
+
+    const addSystemMessage = async (text, type = 'info', persist = false) => {
+        const sysMsg = {
+            id: `sys-${Date.now()}`,
+            message: text,
+            is_system: true,
+            system_type: type,
+            created_at: new Date().toISOString(),
+        };
+        setChatMessages(prev => [...prev, sysMsg]);
+
+        if (persist) {
+            try {
+                await authFetch(`/api/catalogs/${entry.id}/chat`, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        message: `SYSTEM_MESSAGE::${type}::${text}`,
+                        is_user: false
+                    })
+                });
+            } catch (e) {
+                console.error("Failed to persist system message", e);
+            }
+        }
+    };
+
+    const handleSlashCommand = async (input) => {
+        const parts = input.trim().split(/\s+/);
+        const cmd = parts[0].toLowerCase();
+        const rest = parts.slice(1).join(' ');
+
+        if (cmd === '/help') {
+            addSystemMessage('__HELP__', 'help');
+            return true;
+        }
+        if (cmd === '/post') {
+            if (!rest) { addSystemMessage('Usage: /post <message>', 'error'); return true; }
+            try {
+                const res = await authFetch(`/api/catalogs/${entry.id}/updates`, {
+                    method: 'POST', body: JSON.stringify({ content: rest, update_type: 'progress' }),
+                });
+                if (res.ok) { addSystemMessage(`Update posted: "${rest}"`, 'success', true); await fetchUpdates(); }
+                else { addSystemMessage('Failed to post update', 'error'); }
+            } catch { addSystemMessage('Error posting update', 'error'); }
+            return true;
+        }
+        if (cmd === '/update') {
+            const field = parts[1];
+            const value = parts.slice(2).join(' ');
+            if (!field || !value) { addSystemMessage('Usage: /update <field> <value>\nFields: summary, tech_stack, pros_cons, similar_tools', 'error'); return true; }
+            try {
+                const res = await authFetch(`/api/catalogs/${entry.id}`, {
+                    method: 'PUT', body: JSON.stringify({ [field]: value }),
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.entry && onEntryUpdate) onEntryUpdate(data.entry);
+                    addSystemMessage(`Updated "${field}" successfully`, 'success', true);
+                } else { addSystemMessage(`Failed to update "${field}"`, 'error'); }
+            } catch { addSystemMessage('Error updating field', 'error'); }
+            return true;
+        }
+        if (cmd === '/publish') {
+            try {
+                const res = await authFetch(`/api/catalogs/${entry.id}/publish`, { method: 'POST', body: JSON.stringify({}) });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.entry && onEntryUpdate) onEntryUpdate(data.entry);
+                    addSystemMessage('Idea published to the community!', 'success');
+                } else { addSystemMessage('Failed to publish. Ensure the idea is completed.', 'error'); }
+            } catch { addSystemMessage('Error publishing idea', 'error'); }
+            return true;
+        }
+        if (cmd === '/unpublish') {
+            try {
+                const res = await authFetch(`/api/catalogs/${entry.id}/unpublish`, { method: 'POST' });
+                if (res.ok) {
+                    addSystemMessage('Idea set back to private.', 'success');
+                    if (onEntryUpdate) { const e2 = { ...entry, visibility: 'private', published_at: null }; onEntryUpdate(e2); }
+                } else { addSystemMessage('Failed to unpublish', 'error'); }
+            } catch { addSystemMessage('Error unpublishing idea', 'error'); }
+            return true;
+        }
+        return false;
+    };
 
     // Parsers
     const safeArray = (data) => {
@@ -287,6 +387,13 @@ export default function IdeaDetail({ entry, onBack, onEntryUpdate }) {
 
     const sendChatMessage = async () => {
         if (!chatInput.trim()) return;
+        setShowCommands(false);
+
+        // Intercept slash commands
+        if (chatInput.trim().startsWith('/')) {
+            const handled = await handleSlashCommand(chatInput);
+            if (handled) { setChatInput(''); return; }
+        }
         
         setIsChatLoading(true);
         try {
@@ -431,6 +538,27 @@ export default function IdeaDetail({ entry, onBack, onEntryUpdate }) {
         }
     };
 
+    const handleRemoveCollaborator = async (collabId) => {
+        if (!window.confirm("Are you sure you want to remove this collaborator?")) return;
+        try {
+            const res = await authFetch(`/api/catalogs/${entry.id}/collaborators/${collabId}`, {
+                method: 'DELETE'
+            });
+            if (res.ok) {
+                const updatedEntry = {
+                    ...entry,
+                    collaborators: entry.collaborators.filter(c => c.id !== collabId)
+                };
+                onEntryUpdate(updatedEntry);
+            } else {
+                const err = await res.json();
+                alert(err.error || "Failed to remove collaborator");
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    };
+
     return (
         <motion.div
             initial={{ opacity: 0, y: 30 }}
@@ -493,7 +621,56 @@ export default function IdeaDetail({ entry, onBack, onEntryUpdate }) {
                     </div>
                 </div>
 
-                {isOwner && (
+                {/* Builder Team */}
+                {entry.collaborators?.length > 0 && (
+                    <div className="border border-neo-border bg-black/20 p-6">
+                        <h3 className="font-display text-white font-bold uppercase tracking-wide mb-6 flex items-center gap-2">
+                            <Users size={18} className="text-mi-accent" />
+                            Builder Team
+                        </h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                            {/* Owner */}
+                            <div className="flex items-center gap-3 p-4 bg-mi-surface/40 border border-mi-accent/30 rounded-2xl relative overflow-hidden group">
+                                <div className="absolute inset-0 bg-mi-accent/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                <div className="w-12 h-12 rounded-full bg-mi-accent flex items-center justify-center font-heading text-white relative z-10 text-xl border-2 border-mi-accent/20">
+                                    {entry.author?.avatar_url ? <img src={entry.author.avatar_url} className="w-full h-full rounded-full object-cover" /> : (entry.author?.name || 'O')[0]}
+                                </div>
+                                <div className="relative z-10">
+                                    <p className="text-sm font-body font-bold text-white truncate max-w-[120px]">{entry.author?.name || 'Owner'}</p>
+                                    <p className="text-[10px] text-mi-accent font-heading tracking-widest uppercase mt-0.5">Founder</p>
+                                </div>
+                            </div>
+                            {/* Collaborators */}
+                            {entry.collaborators.map(collab => (
+                                <div key={collab.id} className="flex items-center gap-3 p-4 bg-mi-surface/40 border border-mi-border rounded-2xl relative overflow-hidden group hover:border-mi-border-light transition-colors">
+                                    <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                    <div className="w-12 h-12 rounded-full bg-mi-surface-2 border-2 border-mi-border flex items-center justify-center font-heading text-white relative z-10 text-xl">
+                                        {collab.avatar_url ? <img src={collab.avatar_url} className="w-full h-full rounded-full object-cover" /> : (collab.name || 'C')[0]}
+                                    </div>
+                                    <div className="relative z-10">
+                                        <p className="text-sm font-body font-bold text-white truncate max-w-[120px]">{collab.name || 'Builder'}</p>
+                                        <p className="text-[10px] text-mi-text-muted font-heading tracking-widest uppercase mt-0.5">{collab.role?.replace('_', ' ') || 'Contributor'}</p>
+                                    </div>
+                                    
+                                    {isOwner && (
+                                        <button 
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleRemoveCollaborator(collab.id);
+                                            }}
+                                            className="absolute top-2 right-2 p-1.5 rounded-lg bg-red-500/10 text-red-400 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/20 z-20"
+                                            title="Remove collaborator"
+                                        >
+                                            <X size={14} />
+                                        </button>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {hasWriteAccess && (
                     <div className="border border-neo-border bg-black/20 p-6">
                         <div className="flex items-center justify-between mb-4">
                             <h3 className="font-display text-white font-bold uppercase tracking-wide">Edit Catalog</h3>
@@ -594,7 +771,7 @@ export default function IdeaDetail({ entry, onBack, onEntryUpdate }) {
 
                 <div className="border border-neo-border bg-black/20 p-6">
                     <h3 className="font-display text-white font-bold uppercase tracking-wide mb-4">Update Thread</h3>
-                    {isOwner && (
+                    {hasWriteAccess && (
                         <div className="mb-4 grid grid-cols-1 md:grid-cols-4 gap-2">
                             <select
                                 value={newUpdateType}
@@ -629,7 +806,12 @@ export default function IdeaDetail({ entry, onBack, onEntryUpdate }) {
                         ) : updates.map((u) => (
                             <div key={u.id} className="p-3 bg-black/30 border border-neo-border">
                                 <div className="flex items-center justify-between mb-1">
-                                    <span className="text-xs uppercase tracking-wider text-neo-accent">{u.update_type}</span>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs uppercase tracking-wider text-neo-accent">{u.update_type}</span>
+                                        {u.user_id !== entry.user_id && (
+                                            <span className="text-[10px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded uppercase font-bold">Collaborator</span>
+                                        )}
+                                    </div>
                                     <span className="text-xs text-neo-muted">{new Date(u.created_at).toLocaleString()}</span>
                                 </div>
                                 <p className="text-sm text-white whitespace-pre-wrap">{u.content}</p>
@@ -706,7 +888,6 @@ export default function IdeaDetail({ entry, onBack, onEntryUpdate }) {
                     </div>
                 )}
 
-                {/* Pros / Cons Matrix - Only for Ideas */}
                 {input_type === 'idea' && (
                     <div className="border border-neo-border bg-black/20 p-6">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -781,64 +962,208 @@ export default function IdeaDetail({ entry, onBack, onEntryUpdate }) {
                      )}
                      
                      {/* Chat Messages */}
-                     <div className="h-96 overflow-y-auto mb-4 bg-black/30 rounded-lg p-4">
+                     <div ref={chatContainerRef} className="h-96 overflow-y-auto mb-4 bg-black/30 rounded-lg p-4 relative"
+                         onScroll={(e) => {
+                             const el = e.target;
+                             setShowScrollBtn(el.scrollHeight - el.scrollTop - el.clientHeight > 100);
+                         }}
+                     >
                          {chatMessages.length > 0 ? (
                              <div className="space-y-3">
-                                 {chatMessages.map((message, index) => (
-                                     <div key={message.id || index}>
-                                         <div className={`flex ${message.is_user ? 'justify-end' : 'justify-start'}`}>
-                                             <div className={`max-w-[80%] px-4 py-2 rounded-lg ${message.is_user ? 'bg-neo-accent text-black' : 'bg-black/50 text-white'}`}>
-                                                 <div className="text-sm prose prose-invert prose-sm max-w-none">
-                                                     <ReactMarkdown>{message.message}</ReactMarkdown>
+                                 {chatMessages.map((message, index) => {
+                                     let isSystem = message.is_system;
+                                     let sysText = message.message;
+                                     let sysType = message.system_type || 'info';
+
+                                     // Parse backend persisted system messages
+                                     if (!message.is_user && message.message?.startsWith('SYSTEM_MESSAGE::')) {
+                                         isSystem = true;
+                                         const parts = message.message.split('::');
+                                         sysType = parts[1] || 'info';
+                                         sysText = parts[2] || '';
+                                     }
+
+                                     if (isSystem) {
+                                         if (sysText === '__HELP__') {
+                                             return (
+                                                 <div key={message.id || index} className="mx-auto max-w-sm bg-mi-surface-2 border border-mi-border rounded-xl p-4">
+                                                     <div className="flex items-center gap-2 mb-3">
+                                                         <HelpCircle size={14} className="text-mi-accent" />
+                                                         <span className="font-heading text-sm tracking-wide text-white">COMMANDS</span>
+                                                     </div>
+                                                     <div className="space-y-2">
+                                                         {SLASH_COMMANDS.filter(c => c.cmd !== '/help').map(c => (
+                                                             <div key={c.cmd} className="flex items-start gap-2">
+                                                                 <code className="text-xs text-mi-accent font-body bg-mi-accent/10 px-1.5 py-0.5 rounded shrink-0">{c.cmd}</code>
+                                                                 <span className="text-xs text-mi-text-muted font-body">{c.desc}</span>
+                                                             </div>
+                                                         ))}
+                                                     </div>
                                                  </div>
-                                                 <span className="text-xs text-neo-muted block mt-1">
-                                                     {new Date(message.created_at).toLocaleTimeString()}
-                                                 </span>
+                                             );
+                                         }
+                                         return (
+                                             <div key={message.id || index} className="flex justify-center">
+                                                 <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-body ${
+                                                     sysType === 'success' ? 'bg-green-500/10 text-green-400 border border-green-500/20' :
+                                                     sysType === 'error' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
+                                                     'bg-white/5 text-mi-text-muted border border-mi-border'
+                                                 }`}>
+                                                     {sysType === 'success' ? <CheckCircle2 size={12} /> :
+                                                      sysType === 'error' ? <AlertTriangle size={12} /> :
+                                                      <Terminal size={12} />}
+                                                     {sysText}
+                                                 </div>
                                              </div>
+                                         );
+                                     }
+
+
+                                     const isLong = !message.is_user && message.message && message.message.length > 300;
+                                     const isExpanded = expandedMessages.has(message.id);
+
+                                     return (
+                                         <div key={message.id || index}>
+                                             {message.is_user ? (
+                                                 /* User message — compact right-aligned bubble */
+                                                 <div className="flex justify-end">
+                                                     <div className="max-w-[80%] px-4 py-2 rounded-xl bg-mi-accent text-white">
+                                                         <p className="text-sm font-body">{message.message}</p>
+                                                         <span className="text-[10px] text-white/50 block mt-1">
+                                                             {new Date(message.created_at).toLocaleTimeString()}
+                                                         </span>
+                                                     </div>
+                                                 </div>
+                                             ) : (
+                                                 /* AI message — structured card */
+                                                 <div className="flex gap-2.5">
+                                                     <div className="w-7 h-7 rounded-lg bg-mi-surface-2 border border-mi-border flex items-center justify-center shrink-0 mt-0.5">
+                                                         <Bot size={14} className="text-mi-accent" />
+                                                     </div>
+                                                     <div className="flex-1 min-w-0 bg-mi-surface-2/60 border border-mi-border/60 rounded-xl px-4 py-3">
+                                                         <div className="flex items-center gap-2 mb-2">
+                                                             <span className="text-xs font-body font-semibold text-mi-text-secondary">AI Assistant</span>
+                                                             <span className="text-[10px] text-mi-text-muted font-body">
+                                                                 {new Date(message.created_at).toLocaleTimeString()}
+                                                             </span>
+                                                         </div>
+                                                         <div className={`text-sm prose prose-invert prose-sm max-w-none font-body ${isLong && !isExpanded ? 'max-h-32 overflow-hidden relative' : ''}`}>
+                                                             <ReactMarkdown>{message.message}</ReactMarkdown>
+                                                             {isLong && !isExpanded && (
+                                                                 <div className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-mi-surface-2/90 to-transparent" />
+                                                             )}
+                                                         </div>
+                                                         {isLong && (
+                                                             <button
+                                                                 onClick={() => setExpandedMessages(prev => {
+                                                                     const next = new Set(prev);
+                                                                     isExpanded ? next.delete(message.id) : next.add(message.id);
+                                                                     return next;
+                                                                 })}
+                                                                 className="flex items-center gap-1 text-xs text-mi-accent font-body mt-2 hover:underline"
+                                                             >
+                                                                 {isExpanded ? <><ChevronUp size={12} /> Show less</> : <><ChevronDown size={12} /> Show more</>}
+                                                             </button>
+                                                         )}
+                                                     </div>
+                                                 </div>
+                                             )}
+                                             
+                                             {/* Proposed changes card */}
+                                             {message.proposed_changes && !dismissedProposals.has(message.id) && (
+                                                 <ProposedChangesCard
+                                                     proposedChanges={message.proposed_changes}
+                                                     onAccept={() => handleAcceptChanges(message.id, message.proposed_changes)}
+                                                     onReject={() => handleRejectChanges(message.id)}
+                                                     isApplying={applyingChangeId === message.id}
+                                                 />
+                                             )}
+                                             {message.proposed_changes && dismissedProposals.has(message.id) && (
+                                                 <div className="flex items-center gap-1 text-xs text-neo-muted italic ml-10 mt-1">
+                                                     <CheckCircle2 size={12} /> Changes {applyingChangeId === null ? 'handled' : 'applied'}
+                                                 </div>
+                                             )}
                                          </div>
-                                         
-                                         {/* Proposed changes card */}
-                                         {message.proposed_changes && !dismissedProposals.has(message.id) && (
-                                             <ProposedChangesCard
-                                                 proposedChanges={message.proposed_changes}
-                                                 onAccept={() => handleAcceptChanges(message.id, message.proposed_changes)}
-                                                 onReject={() => handleRejectChanges(message.id)}
-                                                 isApplying={applyingChangeId === message.id}
-                                             />
-                                         )}
-                                         {message.proposed_changes && dismissedProposals.has(message.id) && (
-                                             <div className="text-xs text-neo-muted italic ml-4 mt-1">
-                                                 ✓ Changes {applyingChangeId === null ? 'handled' : 'applied'}
-                                             </div>
-                                         )}
+                                     );
+                                 })}
+                                 {/* Typing indicator */}
+                                 {isChatLoading && (
+                                     <div className="flex gap-2.5">
+                                         <div className="w-7 h-7 rounded-lg bg-mi-surface-2 border border-mi-border flex items-center justify-center shrink-0">
+                                             <Bot size={14} className="text-mi-accent" />
+                                         </div>
+                                         <div className="bg-mi-surface-2/60 border border-mi-border/60 rounded-xl px-4 py-3 flex items-center gap-1.5">
+                                             <span className="w-1.5 h-1.5 rounded-full bg-mi-text-muted animate-bounce" style={{animationDelay: '0ms'}} />
+                                             <span className="w-1.5 h-1.5 rounded-full bg-mi-text-muted animate-bounce" style={{animationDelay: '150ms'}} />
+                                             <span className="w-1.5 h-1.5 rounded-full bg-mi-text-muted animate-bounce" style={{animationDelay: '300ms'}} />
+                                         </div>
                                      </div>
-                                 ))}
+                                 )}
                                  <div ref={chatEndRef} />
                              </div>
                          ) : (
-                             <p className="text-neo-muted text-center py-8">No messages yet. Start the conversation!</p>
+                             <p className="text-neo-muted text-center py-8">No messages yet. Type / for commands or start chatting!</p>
+                         )}
+                         {/* Scroll to bottom button */}
+                         {showScrollBtn && (
+                             <button
+                                 onClick={() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })}
+                                 className="absolute bottom-3 right-3 w-8 h-8 rounded-full bg-mi-accent text-white flex items-center justify-center shadow-lg hover:bg-mi-accent-hover transition-colors"
+                             >
+                                 <ArrowDown size={14} />
+                             </button>
                          )}
                      </div>
                      
+                     {/* Slash Command Autocomplete */}
+                     <AnimatePresence>
+                         {showCommands && (
+                             <motion.div
+                                 initial={{ opacity: 0, y: 8 }}
+                                 animate={{ opacity: 1, y: 0 }}
+                                 exit={{ opacity: 0, y: 8 }}
+                                 className="mb-2 bg-mi-surface border border-mi-border rounded-xl overflow-hidden shadow-editorial"
+                             >
+                                 {SLASH_COMMANDS.filter(c => c.cmd.startsWith(chatInput.trim().toLowerCase() || '/')).map(c => (
+                                     <button
+                                         key={c.cmd}
+                                         onClick={() => { setChatInput(c.cmd + ' '); setShowCommands(false); }}
+                                         className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-white/5 transition-colors group"
+                                     >
+                                         <c.icon size={14} className="text-mi-accent shrink-0" />
+                                         <div className="flex-1 min-w-0">
+                                             <code className="text-sm text-white font-body">{c.cmd}</code>
+                                             <span className="text-xs text-mi-text-muted font-body ml-2">{c.desc}</span>
+                                         </div>
+                                         <span className="text-[10px] text-mi-text-muted font-body opacity-0 group-hover:opacity-100 transition-opacity">{c.example}</span>
+                                     </button>
+                                 ))}
+                             </motion.div>
+                         )}
+                     </AnimatePresence>
+
                      {/* Chat Input */}
                      <div className="flex gap-2">
                          <textarea
                              value={chatInput}
-                             onChange={(e) => setChatInput(e.target.value)}
+                             onChange={(e) => {
+                                 setChatInput(e.target.value);
+                                 setShowCommands(e.target.value.startsWith('/') && !e.target.value.includes(' '));
+                             }}
                              onKeyDown={(e) => {
                                   if (e.key === 'Enter' && !e.shiftKey) {
                                       e.preventDefault();
                                       isSearchMode ? searchCatalogs() : sendChatMessage();
                                   }
                               }}
-                              placeholder={isSearchMode ? "Search other catalogs..." : "Ask questions about this catalog or request changes..."}
-                             className="flex-1 min-h-[60px] px-3 py-2 bg-black/40 text-white border border-neo-border resize-none focus:outline-none focus:ring-2 focus:ring-neo-accent"
+                              placeholder={isSearchMode ? "Search other catalogs..." : "Message or type / for commands..."}
+                             className="flex-1 min-h-[60px] px-3 py-2 bg-black/40 text-white border border-neo-border resize-none focus:outline-none focus:ring-2 focus:ring-neo-accent rounded-lg font-body text-sm"
                              disabled={isChatLoading}
                          />
                          <button
                              onClick={() => isSearchMode ? searchCatalogs() : sendChatMessage()}
                              disabled={isChatLoading || !chatInput.trim()}
-                             className={`px-4 py-2 bg-neo-accent text-black font-display font-bold uppercase tracking-wider transition-colors hover:bg-white hover:text-black disabled:opacity-50`}
+                             className={`px-4 py-2 bg-mi-accent text-white font-body font-semibold text-sm rounded-lg transition-colors hover:bg-mi-accent-hover disabled:opacity-50`}
                          >
                              {isChatLoading ? (isSearchMode ? 'Searching...' : 'Sending...') : (isSearchMode ? 'Search' : 'Send')}
                          </button>

@@ -81,14 +81,14 @@ export default function HomePage() {
   ];
 
   return (
-    <div className="overflow-hidden">
+    <div className="overflow-hidden relative" style={{ position: 'relative' }}>
       {/* ═══════════════════════════════════════════
           HERO SECTION
           ═══════════════════════════════════════════ */}
-      <section ref={heroRef} className="relative min-h-screen flex items-end overflow-hidden">
+      <section ref={heroRef} className="relative min-h-screen flex items-end overflow-hidden" style={{ position: 'relative' }}>
         {/* Background video */}
         <motion.div
-          style={{ scale: heroScale, y: heroY }}
+          style={{ scale: heroScale }}
           className="absolute inset-0 z-0"
         >
           <img

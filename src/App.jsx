@@ -9,10 +9,35 @@ import DashboardPage from './pages/DashboardPage';
 import CommunityPage from './pages/CommunityPage';
 import PublishPage from './pages/PublishPage';
 import ProfilePage from './pages/ProfilePage';
+import SettingsPage from './pages/SettingsPage';
+import AdminPage from './pages/AdminPage';
+import { Toaster } from 'react-hot-toast';
 
 function App() {
   return (
     <AuthProvider>
+      <Toaster 
+        position="bottom-right" 
+        toastOptions={{
+          className: 'mi-toast',
+          style: {
+            background: 'rgba(28, 28, 31, 0.95)',
+            color: '#fff',
+            borderRadius: '16px',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            backdropFilter: 'blur(10px)',
+            fontSize: '14px',
+            padding: '12px 24px',
+            boxShadow: '0 10px 30px -5px rgba(0,0,0,0.5)',
+          },
+          success: {
+            iconTheme: {
+              primary: '#ff4d00',
+              secondary: '#fff',
+            },
+          },
+        }} 
+      />
       <BrowserRouter>
         <Routes>
           {/* Login page — standalone layout (no navbar/footer) */}
@@ -39,6 +64,22 @@ function App() {
               element={
                 <ProtectedRoute>
                   <PublishPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/settings"
+              element={
+                <ProtectedRoute>
+                  <SettingsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin"
+              element={
+                <ProtectedRoute>
+                  <AdminPage />
                 </ProtectedRoute>
               }
             />

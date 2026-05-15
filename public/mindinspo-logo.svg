@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="a" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ff6a2a"/>
+      <stop offset="100%" stop-color="#ff4d00"/>
+    </linearGradient>
+    <linearGradient id="b" x1="20%" y1="0%" x2="80%" y2="100%">
+      <stop offset="0%" stop-color="#fff" stop-opacity=".25"/>
+      <stop offset="100%" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <!-- Rounded square base -->
+  <rect width="64" height="64" rx="16" fill="url(#a)"/>
+  <rect width="64" height="64" rx="16" fill="url(#b)"/>
+  <!-- Brain/lightbulb fusion: a stylized M made of neural pathways -->
+  <path d="M18 44V28c0-5.5 4.5-10 10-10s10 4.5 10 10v4c0 5.5 4.5-10 10-10s10 4.5 10 10" stroke="none"/>
+  <!-- Simplified brain icon with spark -->
+  <g transform="translate(14, 12)" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Left brain hemisphere -->
+    <path d="M18 38V36c0-1.1.9-2 2-2h0c1.1 0 2 .9 2 2v2"/>
+    <path d="M14 36c-3.3 0-6-2.7-6-6 0-2 1-3.8 2.5-4.9C10.2 24.4 10 23.7 10 23c0-2.2 1.8-4 4-4 .3 0 .7 0 1 .1C16.1 16.2 19 14 22.5 14c2.5 0 4.7 1.2 6.1 3"/>
+    <!-- Right brain hemisphere -->
+    <path d="M26 36c3.3 0 6-2.7 6-6 0-2-1-3.8-2.5-4.9.3-.7.5-1.4.5-2.1 0-2.2-1.8-4-4-4-.3 0-.7 0-1 .1"/>
+    <!-- Center dividing line -->
+    <path d="M20 14v22" stroke-dasharray="2 3" opacity=".5"/>
+    <!-- Spark/inspiration mark -->
+    <path d="M29 6l2-4M35 10l3-2M36 17l4-1" stroke-width="2" opacity=".8"/>
+  </g>
+</svg>

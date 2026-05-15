@@ -43,8 +43,10 @@ export default function CatalogCard({ entry, index, onSelect }) {
         <motion.div
             initial={{ opacity: 0, scale: 0.95, y: 30 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
+            whileHover={!isPending ? { y: -8, boxShadow: '0 20px 40px -15px rgba(0,0,0,0.6)', borderColor: 'rgba(var(--mi-accent-rgb), 0.5)' } : {}}
+            whileTap={!isPending ? { scale: 0.98 } : {}}
             transition={{ duration: 0.4, delay: index * 0.1 }}
-            className={`card-neo flex flex-col gap-6 ${isPending ? 'border-dashed border-neo-muted opacity-70' : ''}`}
+            className={`card-neo flex flex-col gap-6 relative z-10 ${isPending ? 'border-dashed border-neo-muted opacity-70' : ''}`}
         >
             <div className="flex justify-between items-start border-b-2 border-neo-border pb-4">
                 <div>
