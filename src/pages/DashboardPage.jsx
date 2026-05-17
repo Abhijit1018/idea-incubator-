@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Lightbulb, Wrench, Clock, CheckCircle2, AlertTriangle, Search,
   ArrowUpRight, Plus, TrendingUp, Sparkles, Zap, ArrowRight,
-  BarChart3, Activity, Eye, Filter, LayoutGrid, List, Handshake, Check, X as X2, Loader2, Inbox, Users
+  BarChart3, Activity, Eye, Filter, LayoutGrid, List, Handshake, Check, X as X2, Loader2, Inbox, Users, Send
 } from 'lucide-react';
 import { CatalogCardSkeleton, StatCardSkeleton } from '../components/SkeletonLoaders';
 import { useAuth } from '../lib/AuthContext';
