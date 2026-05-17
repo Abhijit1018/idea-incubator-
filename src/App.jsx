@@ -12,6 +12,7 @@ import PublishPage from './pages/PublishPage';
 import ProfilePage from './pages/ProfilePage';
 import SettingsPage from './pages/SettingsPage';
 import AdminPage from './pages/AdminPage';
+import CollabWorkspacePage from './pages/CollabWorkspacePage';
 import { Toaster } from 'react-hot-toast';
 
 function App() {
@@ -66,6 +67,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <PublishPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/collab/:requestId"
+              element={
+                <ProtectedRoute>
+                  <CollabWorkspacePage />
                 </ProtectedRoute>
               }
             />

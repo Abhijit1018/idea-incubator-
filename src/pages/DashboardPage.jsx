@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Lightbulb, Wrench, Clock, CheckCircle2, AlertTriangle, Search,
   ArrowUpRight, Plus, TrendingUp, Sparkles, Zap, ArrowRight,
-  BarChart3, Activity, Eye, Filter, LayoutGrid, List, Handshake, Check, X as X2, Loader2, Inbox
+  BarChart3, Activity, Eye, Filter, LayoutGrid, List, Handshake, Check, X as X2, Loader2, Inbox, Users
 } from 'lucide-react';
 import { CatalogCardSkeleton, StatCardSkeleton } from '../components/SkeletonLoaders';
 import { useAuth } from '../lib/AuthContext';
@@ -523,12 +523,21 @@ export default function DashboardPage() {
                             </button>
                           </div>
                         ) : (
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <span className={`flex items-center gap-1 text-xs font-body ${req.status === 'accepted' ? 'text-green-400' : 'text-mi-text-muted'}`}>
                               {req.status === 'accepted' ? <><Check size={12} /> Accepted</> : <><X2 size={12} /> Declined</>}
                             </span>
                             {req.status === 'accepted' && req.requester?.email && (
                               <span className="text-[10px] font-body text-mi-accent truncate">{req.requester.email}</span>
+                            )}
+                            {req.status === 'accepted' && (
+                              <Link
+                                to={`/collab/${req.id}`}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-mi-accent/10 text-mi-accent text-xs font-body font-semibold hover:bg-mi-accent/20 transition-colors"
+                              >
+                                <Users size={12} />
+                                Open Workspace
+                              </Link>
                             )}
                           </div>
                         )}
@@ -553,15 +562,24 @@ export default function DashboardPage() {
                           </span>
                         </div>
                         <p className="font-body text-xs text-white truncate mb-1">{req.idea_title}</p>
-                        <div className="flex items-center justify-between mt-2">
+                        <div className="flex items-center justify-between mt-2 flex-wrap gap-2">
                           <span className={`px-2 py-0.5 rounded-md text-[10px] font-heading tracking-wider uppercase ${
-                            req.status === 'pending' ? 'bg-yellow-500/10 text-yellow-400' : 
+                            req.status === 'pending' ? 'bg-yellow-500/10 text-yellow-400' :
                             req.status === 'accepted' ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'
                           }`}>
                             {req.status}
                           </span>
                           {req.status === 'accepted' && req.owner?.email && (
                             <span className="text-[10px] font-body text-mi-accent truncate">{req.owner.email}</span>
+                          )}
+                          {req.status === 'accepted' && (
+                            <Link
+                              to={`/collab/${req.id}`}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-mi-accent/10 text-mi-accent text-xs font-body font-semibold hover:bg-mi-accent/20 transition-colors"
+                            >
+                              <Users size={12} />
+                              Open Workspace
+                            </Link>
                           )}
                         </div>
                       </div>
