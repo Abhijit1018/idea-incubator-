@@ -71,6 +71,16 @@ export default function HomePage() {
   const heroScale = useTransform(scrollYProgress, [0, 0.8], [1, 1.05]);
   const heroY = useTransform(scrollYProgress, [0, 1], [0, 100]);
 
+  const [stats, setStats] = useState({ total_users: 0, total_ideas: 0, recent: [] });
+
+  useEffect(() => {
+    const base = (import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/$/, '') || 'http://localhost:5000';
+    fetch(`${base}/api/stats`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setStats(d); })
+      .catch(() => {});
+  }, []);
+
   const features = [
     { icon: Lightbulb, title: 'IDEA INGESTION', desc: 'Drop any raw idea, tool name, or concept. Our AI pipeline researches, expands, and structures it into actionable intelligence.' },
     { icon: Brain, title: 'AI RESEARCH ENGINE', desc: 'Powered by n8n workflows and LLMs. Generates summaries, tech stacks, pros/cons, architecture diagrams, and concept imagery.' },
@@ -194,7 +204,7 @@ export default function HomePage() {
                   ))}
                 </div>
                 <p className="font-body text-sm text-white/50">
-                  <span className="text-white font-medium">builders</span> already incubating
+                  <span className="text-white font-medium">{stats.total_users > 0 ? stats.total_users : 'builders'}</span> already incubating
                 </p>
               </motion.div>
             </div>
@@ -383,8 +393,8 @@ export default function HomePage() {
       <section className="py-16 border-y border-mi-border">
         <div className="max-w-[1400px] mx-auto px-6 lg:px-10">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            <StatCounter value="∞" label="Ideas Supported" />
-            <StatCounter value="6+" label="AI-Generated Fields" />
+            <StatCounter value={stats.total_users > 0 ? `${stats.total_users}+` : '∞'} label="Active Builders" />
+            <StatCounter value={stats.total_ideas > 0 ? `${stats.total_ideas}+` : '6+'} label="Ideas Incubated" />
             <StatCounter value="<30s" label="Processing Time" />
             <StatCounter value="100%" label="Open Source" />
           </div>
@@ -416,39 +426,36 @@ export default function HomePage() {
 
             {/* Stacked cards preview */}
             <div className="relative">
-              {[
-                { title: 'Smart Home Automation', tag: 'IoT', color: 'from-blue-500/20 to-cyan-500/10' },
-                { title: 'Decentralized Voting', tag: 'Web3', color: 'from-purple-500/20 to-pink-500/10' },
-                { title: 'AI Content Pipeline', tag: 'AI/ML', color: 'from-orange-500/20 to-red-500/10' },
-              ].map((card, i) => (
+              {(stats.recent.length > 0
+                ? stats.recent
+                : [
+                    { raw_input: 'Smart Home Automation', tags: ['IoT'], summary: 'AI-analyzed • community idea' },
+                    { raw_input: 'Decentralized Voting', tags: ['Web3'], summary: 'AI-analyzed • community idea' },
+                    { raw_input: 'AI Content Pipeline', tags: ['AI/ML'], summary: 'AI-analyzed • community idea' },
+                  ]
+              ).map((card, i) => (
                 <motion.div
                   key={i}
                   initial={{ opacity: 0, y: 20, rotate: 0 }}
                   whileInView={{ opacity: 1, y: 0, rotate: i === 0 ? -2 : i === 2 ? 2 : 0 }}
-                  whileHover={{ 
-                    y: -15, 
-                    rotate: 0, 
-                    scale: 1.02,
-                    zIndex: 40 
-                  }}
+                  whileHover={{ y: -15, rotate: 0, scale: 1.02, zIndex: 40 }}
                   viewport={{ once: true }}
-                  transition={{ 
-                    delay: i * 0.15,
-                    duration: 0.3,
-                    ease: "easeOut"
-                  }}
-                  className={`${i > 0 ? '-mt-16' : ''} relative bg-mi-surface border border-mi-border rounded-2xl p-6 shadow-editorial cursor-pointer hover:border-mi-accent/40 group transition-colors duration-300`}
+                  transition={{ delay: i * 0.15, duration: 0.3, ease: 'easeOut' }}
+                  className={`${i > 0 ? '-mt-16' : ''} relative bg-mi-surface border border-mi-border rounded-2xl p-4 sm:p-6 shadow-editorial cursor-pointer hover:border-mi-accent/40 group transition-colors duration-300`}
                   style={{ zIndex: 30 - i * 10 }}
                 >
                   <Link to="/community" className="absolute inset-0 z-20 rounded-2xl" />
-                  <div className={`absolute inset-0 rounded-2xl bg-gradient-to-br ${card.color} opacity-30 group-hover:opacity-60 transition-opacity duration-300 pointer-events-none`} />
                   <div className="relative z-10 flex items-center justify-between pointer-events-none">
                     <div>
-                      <span className="px-2 py-0.5 bg-mi-accent/20 text-mi-accent text-xs font-body font-semibold rounded-md">{card.tag}</span>
-                      <h4 className="font-heading text-xl tracking-wide text-white mt-2 group-hover:text-mi-accent transition-colors duration-300">{card.title}</h4>
-                      <p className="font-body text-xs text-mi-text-muted mt-1">AI-analyzed • 3 collaborators</p>
+                      {(card.tags || []).slice(0, 1).map(tag => (
+                        <span key={tag} className="px-2 py-0.5 bg-mi-accent/20 text-mi-accent text-xs font-body font-semibold rounded-md">{tag}</span>
+                      ))}
+                      <h4 className="font-heading text-xl tracking-wide text-white mt-2 group-hover:text-mi-accent transition-colors duration-300 line-clamp-1">
+                        {card.raw_input}
+                      </h4>
+                      <p className="font-body text-xs text-mi-text-muted mt-1 line-clamp-2">{card.summary || 'AI-analyzed • community idea'}</p>
                     </div>
-                    <ChevronRight size={20} className="text-mi-text-muted group-hover:text-mi-accent group-hover:translate-x-1 transition-all duration-300" />
+                    <ChevronRight size={20} className="text-mi-text-muted group-hover:text-mi-accent group-hover:translate-x-1 transition-all duration-300 shrink-0 ml-3" />
                   </div>
                 </motion.div>
               ))}
