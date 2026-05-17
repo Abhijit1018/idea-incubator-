@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './lib/AuthContext';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
+import ScrollToTop from './components/ScrollToTop';
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
@@ -39,6 +40,7 @@ function App() {
         }} 
       />
       <BrowserRouter>
+        <ScrollToTop />
         <Routes>
           {/* Login page — standalone layout (no navbar/footer) */}
           <Route path="/login" element={<LoginPage />} />
