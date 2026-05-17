@@ -24,6 +24,35 @@ export default function SettingsPage() {
   const [newSkill, setNewSkill] = useState('');
 
   const [activeTab, setActiveTab] = useState('profile');
+  const [deletingAccount, setDeletingAccount] = useState(false);
+
+  const handleDeleteAccount = async () => {
+    const confirmed = window.confirm(
+      'Are you sure? This will permanently delete your account and ALL your ideas, comments, and data. This cannot be undone.'
+    );
+    if (!confirmed) return;
+
+    const doubleConfirmed = window.confirm(
+      'Last chance — permanently delete everything?'
+    );
+    if (!doubleConfirmed) return;
+
+    setDeletingAccount(true);
+    try {
+      const res = await authFetch('/api/account/delete', { method: 'DELETE' });
+      if (res.ok) {
+        toast.success('Account deleted');
+        await signOut();
+      } else {
+        const err = await res.json();
+        toast.error(err.error || 'Failed to delete account');
+      }
+    } catch {
+      toast.error('Network error — try again');
+    } finally {
+      setDeletingAccount(false);
+    }
+  };
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -350,8 +379,13 @@ export default function SettingsPage() {
                   <div className="pt-8 border-t border-red-900/30">
                     <h4 className="font-heading text-lg text-red-400 mb-2">Danger Zone</h4>
                     <p className="font-body text-xs text-mi-text-muted mb-4">Permanently delete your account and all associated data.</p>
-                    <button className="px-6 py-2 border border-red-900/50 text-red-400 font-body text-sm rounded-xl hover:bg-red-400/10 transition-all">
-                      Delete Account
+                    <button
+                      onClick={handleDeleteAccount}
+                      disabled={deletingAccount}
+                      className="flex items-center gap-2 px-6 py-2 border border-red-900/50 text-red-400 font-body text-sm rounded-xl hover:bg-red-400/10 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {deletingAccount ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                      {deletingAccount ? 'Deleting…' : 'Delete Account'}
                     </button>
                   </div>
                 </div>

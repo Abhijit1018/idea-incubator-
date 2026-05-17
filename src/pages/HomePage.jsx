@@ -71,7 +71,7 @@ export default function HomePage() {
   const heroScale = useTransform(scrollYProgress, [0, 0.8], [1, 1.05]);
   const heroY = useTransform(scrollYProgress, [0, 1], [0, 100]);
 
-  const [stats, setStats] = useState({ total_users: 0, total_ideas: 0, recent: [] });
+  const [stats, setStats] = useState({ total_users: 0, total_ideas: 0, recent: [], recent_users: [] });
 
   useEffect(() => {
     const base = (import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/$/, '') || 'http://localhost:5000';
@@ -194,13 +194,18 @@ export default function HomePage() {
                 className="mt-16 flex items-center gap-4"
               >
                 <div className="flex -space-x-3">
-                  {[
-                    'bg-gradient-to-br from-orange-400 to-red-500',
-                    'bg-gradient-to-br from-blue-400 to-purple-500',
-                    'bg-gradient-to-br from-green-400 to-teal-500',
-                    'bg-gradient-to-br from-yellow-400 to-orange-500',
-                  ].map((bg, i) => (
-                    <div key={i} className={`w-10 h-10 rounded-full ${bg} border-2 border-mi-bg shadow-sm`} />
+                  {(stats.recent_users.length > 0 ? stats.recent_users : [
+                    { initials: 'AB', avatar_url: null },
+                    { initials: 'MK', avatar_url: null },
+                    { initials: 'SR', avatar_url: null },
+                    { initials: 'PD', avatar_url: null },
+                  ]).map((u, i) => (
+                    <div key={i} className="w-10 h-10 rounded-full border-2 border-mi-bg shadow-sm overflow-hidden bg-mi-surface flex items-center justify-center">
+                      {u.avatar_url
+                        ? <img src={u.avatar_url} alt={u.initials} className="w-full h-full object-cover" />
+                        : <span className="font-heading text-xs text-white/80 tracking-wide">{u.initials}</span>
+                      }
+                    </div>
                   ))}
                 </div>
                 <p className="font-body text-sm text-white/50">
