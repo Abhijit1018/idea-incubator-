@@ -77,7 +77,7 @@ export default function HomePage() {
     const base = (import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/$/, '') || 'http://localhost:5000';
     fetch(`${base}/api/stats`)
       .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d) setStats(d); })
+      .then(d => { if (d) setStats(prev => ({ ...prev, ...d })); })
       .catch(() => {});
   }, []);
 
@@ -194,7 +194,7 @@ export default function HomePage() {
                 className="mt-16 flex items-center gap-4"
               >
                 <div className="flex -space-x-3">
-                  {(stats.recent_users.length > 0 ? stats.recent_users : [
+                  {((stats.recent_users?.length ?? 0) > 0 ? stats.recent_users : [
                     { initials: 'AB', avatar_url: null },
                     { initials: 'MK', avatar_url: null },
                     { initials: 'SR', avatar_url: null },
