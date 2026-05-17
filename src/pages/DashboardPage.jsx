@@ -13,6 +13,7 @@ import CatalogCard from '../components/CatalogCard';
 import IdeaDetail from '../components/IdeaDetail';
 import IdeaInput from '../components/IdeaInput';
 import EmptyState from '../components/EmptyState';
+import PipelineStatus from '../components/PipelineStatus';
 
 /* ─── Stat Card ─── */
 function StatCard({ icon: Icon, label, value, accent, delay = 0 }) {
@@ -326,6 +327,9 @@ export default function DashboardPage() {
                 {isSearching && ' • Searching...'}
               </span>
             </div>
+
+            {/* Pipeline Status */}
+            <PipelineStatus entries={entries} />
 
             {/* Entries Grid/List */}
             {loading ? (
