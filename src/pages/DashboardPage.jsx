@@ -372,7 +372,7 @@ export default function DashboardPage() {
                 />
               </div>
             ) : viewMode === 'grid' ? (
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
                 {filteredEntries.map((entry, index) => (
                   <CatalogCard
                     key={entry.id}
@@ -469,7 +469,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Collaboration Requests */}
-            <div className="p-6 rounded-2xl bg-mi-surface border border-mi-border">
+            <div className="p-6 rounded-2xl bg-mi-surface border border-mi-border overflow-x-auto">
               <div className="flex items-center justify-between mb-5">
                 <div className="flex items-center gap-2">
                   <Handshake size={16} className="text-mi-accent" />

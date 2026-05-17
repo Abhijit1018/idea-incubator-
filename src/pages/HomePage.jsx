@@ -127,7 +127,7 @@ export default function HomePage() {
         {/* Hero Content */}
         <motion.div
           style={{ opacity: heroOpacity }}
-          className="relative z-10 w-full max-w-[1400px] mx-auto px-6 lg:px-10 min-h-screen flex items-center"
+          className="relative z-10 w-full max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-10 min-h-screen flex items-center"
         >
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center w-full pt-16">
             {/* Left side: branding and description */}
@@ -146,7 +146,7 @@ export default function HomePage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.3 }}
-                className="font-editorial text-[clamp(4.5rem,8vw,7.5rem)] leading-[0.9] tracking-tight text-white mb-6"
+                className="font-editorial text-[clamp(3rem,10vw,7.5rem)] leading-[0.9] tracking-tight text-white mb-6"
               >
                 <span className="italic">mind</span>
                 <span className="text-mi-accent font-heading not-italic tracking-wide">INSPO.</span>

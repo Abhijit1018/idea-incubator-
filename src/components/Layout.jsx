@@ -216,10 +216,10 @@ function Navbar() {
 function Footer() {
   return (
     <footer className="border-t border-mi-border bg-mi-bg">
-      <div className="max-w-[1400px] mx-auto px-6 lg:px-10 py-16">
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-10 py-16">
         {/* Big CTA */}
         <div className="mb-16">
-          <h2 className="font-heading text-[clamp(3rem,8vw,7rem)] leading-[0.9] tracking-tight text-white">
+          <h2 className="font-heading text-[clamp(2rem,8vw,7rem)] leading-[0.9] tracking-tight text-white">
             LET'S BUILD
             <br />
             <span className="text-gradient-accent">SOMETHING.</span>
