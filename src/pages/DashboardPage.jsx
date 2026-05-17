@@ -14,6 +14,7 @@ import IdeaDetail from '../components/IdeaDetail';
 import IdeaInput from '../components/IdeaInput';
 import EmptyState from '../components/EmptyState';
 import PipelineStatus from '../components/PipelineStatus';
+import OnboardingModal from '../components/OnboardingModal';
 
 /* ─── Stat Card ─── */
 function StatCard({ icon: Icon, label, value, accent, delay = 0 }) {
@@ -94,6 +95,7 @@ export default function DashboardPage() {
   const [sentRequests, setSentRequests] = useState([]);
   const [requestTab, setRequestTab] = useState('incoming');
   const [respondingTo, setRespondingTo] = useState(null);
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   const displayName = user?.user_metadata?.name || user?.email?.split('@')[0] || 'Builder';
 
@@ -106,6 +108,14 @@ export default function DashboardPage() {
     }, 10000); // 10s polling
     return () => clearInterval(interval);
   }, [searchQuery]);
+
+  useEffect(() => {
+    if (!user) return;
+    const key = `mi_onboarded_${user.id}`;
+    if (!localStorage.getItem(key)) {
+      setShowOnboarding(true);
+    }
+  }, [user]);
 
   const fetchRequests = async () => {
     try {
@@ -173,6 +183,17 @@ export default function DashboardPage() {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleOnboardingClose = () => {
+    localStorage.setItem(`mi_onboarded_${user.id}`, '1');
+    setShowOnboarding(false);
+  };
+
+  const handleOnboardingDemo = () => {
+    localStorage.setItem(`mi_onboarded_${user.id}`, '1');
+    setShowOnboarding(false);
+    setShowInput(true);
   };
 
   // Computed stats
@@ -568,6 +589,13 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {showOnboarding && (
+        <OnboardingModal
+          onClose={handleOnboardingClose}
+          onSubmitDemo={handleOnboardingDemo}
+        />
+      )}
     </div>
   );
 }
