@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import mermaid from 'mermaid';
-import { ArrowLeft, Layers, Zap, AlertTriangle, GitBranch, ArrowRight, CheckCircle2, MessageSquare, Search, Send, Check, X, Pencil, Bot, ChevronDown, ChevronUp, ArrowDown, Globe, Lock, Terminal, HelpCircle } from 'lucide-react';
+import { ArrowLeft, Layers, Zap, AlertTriangle, GitBranch, ArrowRight, CheckCircle2, MessageSquare, Search, Send, Check, X, Pencil, Bot, ChevronDown, ChevronUp, ArrowDown, Globe, Lock, Terminal, HelpCircle, RefreshCw, Download, BarChart3, Eye, GitFork } from 'lucide-react';
 import { authFetch } from '../lib/api';
 import ReactMarkdown from 'react-markdown';
 import { useAuth } from '../lib/AuthContext';
@@ -204,6 +204,55 @@ export default function IdeaDetail({ entry, onBack, onEntryUpdate }) {
     const [showCommands, setShowCommands] = useState(false);
     const [expandedMessages, setExpandedMessages] = useState(new Set());
     const [showScrollBtn, setShowScrollBtn] = useState(false);
+    const [analytics, setAnalytics] = useState(null);
+    const [showAnalytics, setShowAnalytics] = useState(false);
+    const [isRegenerating, setIsRegenerating] = useState(false);
+
+    const toggleAnalytics = async () => {
+        const next = !showAnalytics;
+        setShowAnalytics(next);
+        if (next && !analytics) {
+            try {
+                const res = await authFetch(`/api/catalogs/${entry.id}/analytics`);
+                if (res.ok) setAnalytics(await res.json());
+            } catch (e) { console.error('analytics', e); }
+        }
+    };
+
+    const handleRegenerate = async () => {
+        if (!window.confirm('Re-run the AI research for this idea? Current fields will be overwritten when it finishes.')) return;
+        setIsRegenerating(true);
+        try {
+            const res = await authFetch(`/api/catalogs/${entry.id}/regenerate`, { method: 'POST' });
+            if (res.ok) {
+                if (onEntryUpdate) onEntryUpdate({ ...entry, status: 'pending' });
+            }
+        } catch (e) { console.error('regenerate', e); }
+        finally { setIsRegenerating(false); }
+    };
+
+    const exportMarkdown = () => {
+        const arr = (v) => Array.isArray(v) ? v : (() => { try { const p = JSON.parse(v); return Array.isArray(p) ? p : []; } catch { return []; } })();
+        const pc = entry.pros_cons || {};
+        const lines = [
+            `# ${entry.raw_input}`, '',
+            entry.summary || '', '',
+            arr(entry.tech_stack).length ? `## Tech Stack\n${arr(entry.tech_stack).map(t => `- ${t}`).join('\n')}\n` : '',
+            arr(pc.pros).length ? `## Pros\n${arr(pc.pros).map(t => `- ${t}`).join('\n')}\n` : '',
+            arr(pc.cons).length ? `## Cons\n${arr(pc.cons).map(t => `- ${t}`).join('\n')}\n` : '',
+            arr(entry.unique_features).length ? `## Unique Features\n${arr(entry.unique_features).map(t => `- ${t}`).join('\n')}\n` : '',
+            arr(entry.similar_tools).length ? `## Similar Tools\n${arr(entry.similar_tools).map(t => `- ${t}`).join('\n')}\n` : '',
+            entry.market_trend ? `## Market Trend\n${entry.market_trend}\n` : '',
+            entry.link ? `\n[Reference](${entry.link})` : '',
+            '', `_Exported from MindInspo_`,
+        ].filter(Boolean);
+        const blob = new Blob([lines.join('\n')], { type: 'text/markdown' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `${(entry.raw_input || 'idea').slice(0, 40).replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.md`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+    };
 
     // Slash command definitions
     const SLASH_COMMANDS = [
@@ -603,6 +652,63 @@ export default function IdeaDetail({ entry, onBack, onEntryUpdate }) {
                     {input_type === 'tool' ? 'TOOL' : 'IDEA'} • {status}
                 </div>
             </div>
+
+            {/* Owner control bar */}
+            {isOwner && (
+                <div className="flex flex-wrap items-center gap-2 mt-3">
+                    <button
+                        onClick={toggleAnalytics}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-body rounded-lg border border-mi-border text-mi-text-secondary hover:text-white hover:border-mi-accent/40 transition"
+                    >
+                        <BarChart3 size={14} /> {showAnalytics ? 'Hide' : 'Analytics'}
+                    </button>
+                    <button
+                        onClick={handleRegenerate}
+                        disabled={isRegenerating || isPending}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-body rounded-lg border border-mi-border text-mi-text-secondary hover:text-white hover:border-mi-accent/40 transition disabled:opacity-50"
+                        title="Re-run AI research (also recovers a failed idea)"
+                    >
+                        <RefreshCw size={14} className={isRegenerating || isPending ? 'animate-spin' : ''} /> Regenerate
+                    </button>
+                    <button
+                        onClick={exportMarkdown}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-body rounded-lg border border-mi-border text-mi-text-secondary hover:text-white hover:border-mi-accent/40 transition"
+                    >
+                        <Download size={14} /> Export .md
+                    </button>
+                </div>
+            )}
+
+            {/* Analytics panel */}
+            {isOwner && showAnalytics && (
+                <div className="mt-3 border border-mi-border bg-black/20 rounded-xl p-4">
+                    {analytics ? (
+                        <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+                            {[
+                                { label: 'Views', value: analytics.view_count, icon: <Eye size={14} /> },
+                                { label: 'Score', value: analytics.idea_score },
+                                { label: 'Likes', value: analytics.like_count },
+                                { label: 'Comments', value: analytics.comment_count },
+                                { label: 'Bookmarks', value: analytics.bookmark_count },
+                                { label: 'Remixes', value: analytics.remix_count, icon: <GitFork size={14} /> },
+                            ].map((s) => (
+                                <div key={s.label} className="text-center">
+                                    <p className="font-display text-xl font-bold text-white">{s.value ?? 0}</p>
+                                    <p className="text-[10px] uppercase tracking-wide text-mi-text-muted flex items-center justify-center gap-1">{s.icon}{s.label}</p>
+                                </div>
+                            ))}
+                            <div className="col-span-3 sm:col-span-6 flex flex-wrap gap-2 pt-2 border-t border-mi-border/50">
+                                {Object.entries(analytics.reactions || {}).filter(([, v]) => v > 0).map(([k, v]) => (
+                                    <span key={k} className="text-[11px] px-2 py-0.5 rounded bg-white/5 text-mi-text-secondary">{k.replace('_', ' ')}: {v}</span>
+                                ))}
+                                <span className="text-[11px] px-2 py-0.5 rounded bg-white/5 text-mi-text-secondary">connect requests: {analytics.connect_count} ({analytics.connect_accepted} accepted)</span>
+                            </div>
+                        </div>
+                    ) : (
+                        <p className="text-sm text-mi-text-muted">Loading analytics…</p>
+                    )}
+                </div>
+            )}
 
             {/* Main Content Area */}
             <div className="card-neo flex flex-col gap-8">
