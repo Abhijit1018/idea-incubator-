@@ -410,8 +410,17 @@ function PostCard({ entry, index, onLike, onBookmark, onReact, onOpenConnect, on
   const [expanded, setExpanded] = useState(false);
   const [showReactions, setShowReactions] = useState(false);
   const [copied, setCopied] = useState(false);
+  const viewedRef = useRef(false);
 
   const isOwner = user?.id === entry.user_id;
+
+  // Count a view once per card, on first genuine interaction (expand / open
+  // comments / open updates). Best-effort, fire-and-forget.
+  const markViewed = () => {
+    if (viewedRef.current) return;
+    viewedRef.current = true;
+    authFetch(`/api/community/${entry.id}/view`, { method: 'POST', noRetry: true }).catch(() => {});
+  };
 
   const timeAgo = (dateStr) => {
     const diff = Date.now() - new Date(dateStr).getTime();
@@ -501,7 +510,7 @@ function PostCard({ entry, index, onLike, onBookmark, onReact, onOpenConnect, on
               {entry.summary}
             </p>
             {entry.summary.length > 200 && (
-              <button onClick={() => setExpanded(!expanded)} className="font-body text-xs text-mi-accent hover:underline mt-1">
+              <button onClick={() => { if (!expanded) markViewed(); setExpanded(!expanded); }} className="font-body text-xs text-mi-accent hover:underline mt-1">
                 {expanded ? 'Show less' : 'Read more'}
               </button>
             )}
@@ -552,7 +561,7 @@ function PostCard({ entry, index, onLike, onBookmark, onReact, onOpenConnect, on
       <div className="px-5 py-3 border-t border-mi-border/50 flex items-center justify-between">
         <div className="flex items-center gap-1">
           <button
-            onClick={() => setShowComments(!showComments)}
+            onClick={() => { if (!showComments) markViewed(); setShowComments(!showComments); }}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all font-body text-xs ${
               showComments ? 'text-blue-400 bg-blue-400/5' : 'text-mi-text-muted hover:text-blue-400 hover:bg-blue-400/5'
             }`}
@@ -561,7 +570,7 @@ function PostCard({ entry, index, onLike, onBookmark, onReact, onOpenConnect, on
             <span>{entry.comment_count || 0}</span>
           </button>
           <button
-            onClick={() => setShowUpdates(!showUpdates)}
+            onClick={() => { if (!showUpdates) markViewed(); setShowUpdates(!showUpdates); }}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all font-body text-xs ${
               showUpdates ? 'text-mi-accent bg-mi-accent/5' : 'text-mi-text-muted hover:text-mi-accent hover:bg-mi-accent/5'
             }`}
