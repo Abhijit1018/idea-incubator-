@@ -4,10 +4,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search, TrendingUp, Clock, Sparkles, MessageSquare, Heart, Share2, ArrowUpRight, Lightbulb, Wrench,
   Users, Bookmark, MoreHorizontal, Send, X, ChevronDown, Flame, Handshake, Check,
-  Eye, DollarSign, Hammer, Trophy, Download, Camera, Layout, Loader2
+  Eye, DollarSign, Hammer, Trophy, Download, Camera, Layout, Loader2, GitFork
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
-import { authFetch } from '../lib/api';
+import { authFetch, API_BASE_URL } from '../lib/api';
+import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import { useAuth } from '../lib/AuthContext';
 import ConnectModal from '../components/ConnectModal';
 import { PostCardSkeleton } from '../components/SkeletonLoaders';
@@ -403,7 +405,7 @@ function TrendingSidebar({ entries, leaderboard, loading }) {
 }
 
 /* ─── Post Card (Twitter-like) ─── */
-function PostCard({ entry, index, onLike, onBookmark, onReact, onOpenConnect, onShare }) {
+function PostCard({ entry, index, onLike, onBookmark, onReact, onOpenConnect, onShare, onRemix }) {
   const { isAuthenticated, user } = useAuth();
   const [showComments, setShowComments] = useState(false);
   const [showUpdates, setShowUpdates] = useState(false);
@@ -613,6 +615,16 @@ function PostCard({ entry, index, onLike, onBookmark, onReact, onOpenConnect, on
               <span>{entry.connect_sent ? 'Sent' : 'Connect'}</span>
             </button>
           )}
+          {isAuthenticated && !isOwner && (
+            <button
+              onClick={() => onRemix(entry)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all font-body text-xs text-mi-text-muted hover:text-mi-accent hover:bg-mi-accent/5"
+              title="Remix this idea into your catalog"
+            >
+              <GitFork size={15} />
+              <span>Remix</span>
+            </button>
+          )}
         </div>
         <div className="flex items-center gap-1">
           <button
@@ -624,11 +636,13 @@ function PostCard({ entry, index, onLike, onBookmark, onReact, onOpenConnect, on
           </button>
           <button
             onClick={() => {
-              navigator.clipboard.writeText(window.location.origin + '/community?post=' + entry.id);
+              // Backend /i/<id> serves OG tags so the link unfurls on social platforms.
+              const shareUrl = `${API_BASE_URL || window.location.origin}/i/${entry.id}`;
+              navigator.clipboard.writeText(shareUrl);
               setCopied(true);
               setTimeout(() => setCopied(false), 2000);
             }}
-            className="p-1.5 rounded-lg text-mi-text-muted hover:text-white transition-colors" title="Copy link"
+            className="p-1.5 rounded-lg text-mi-text-muted hover:text-white transition-colors" title="Copy share link"
           >
             {copied ? <Check size={15} className="text-green-400" /> : <Share2 size={15} />}
           </button>
@@ -657,6 +671,7 @@ function PostCard({ entry, index, onLike, onBookmark, onReact, onOpenConnect, on
 
 export default function CommunityPage() {
   const { isAuthenticated } = useAuth();
+  const navigate = useNavigate();
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -773,6 +788,23 @@ export default function CommunityPage() {
         ));
       }
     } catch (e) { console.error(e); }
+  };
+
+  const handleRemix = async (entry) => {
+    if (!isAuthenticated) return;
+    const t = toast.loading('Remixing idea…');
+    try {
+      const res = await authFetch(`/api/catalogs/${entry.id}/remix`, { method: 'POST' });
+      if (res.ok) {
+        toast.success('Remixed into your catalog as a draft', { id: t });
+        navigate('/dashboard');
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || 'Could not remix', { id: t });
+      }
+    } catch (e) {
+      toast.error('Could not remix', { id: t });
+    }
   };
 
   return (
@@ -928,6 +960,7 @@ export default function CommunityPage() {
                     onReact={handleReact}
                     onOpenConnect={(e) => setConnectModal({ open: true, entryId: e.id, ideaTitle: e.raw_input })}
                     onShare={(e) => setShareEntry(e)}
+                    onRemix={handleRemix}
                   />
                 ))}
               </div>

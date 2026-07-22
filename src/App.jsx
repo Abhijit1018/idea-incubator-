@@ -15,6 +15,7 @@ const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const CommunityPage = lazy(() => import('./pages/CommunityPage'));
 const PublishPage = lazy(() => import('./pages/PublishPage'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
+const IdeaPage = lazy(() => import('./pages/IdeaPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const AdminPage = lazy(() => import('./pages/AdminPage'));
 const CollabWorkspacePage = lazy(() => import('./pages/CollabWorkspacePage'));
@@ -72,6 +73,7 @@ function App() {
             {/* Public routes */}
             <Route path="/" element={<HomePage />} />
             <Route path="/community" element={<CommunityPage />} />
+            <Route path="/idea/:id" element={<IdeaPage />} />
             <Route path="/profile/:userId" element={<ProfilePage />} />
 
             {/* Protected routes */}
