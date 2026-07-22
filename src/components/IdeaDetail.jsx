@@ -367,10 +367,29 @@ export default function IdeaDetail({ entry, onBack, onEntryUpdate }) {
             if (response.ok) {
                 const messages = await response.json();
                 setChatMessages(messages);
+                return messages;
             }
         } catch (error) {
             console.error('Error fetching chat messages:', error);
         }
+        return null;
+    };
+
+    // Poll for the AI reply until a new assistant message arrives or we time out.
+    // Replaces brittle fixed 3s/8s timeouts — handles slow/cold n8n gracefully.
+    const pollForAiReply = async (baselineAiCount) => {
+        const started = Date.now();
+        const TIMEOUT_MS = 45000;
+        const INTERVAL_MS = 2500;
+        while (Date.now() - started < TIMEOUT_MS) {
+            await new Promise((r) => setTimeout(r, INTERVAL_MS));
+            const messages = await fetchChatMessages();
+            if (messages) {
+                const aiCount = messages.filter((m) => !m.is_user).length;
+                if (aiCount > baselineAiCount) return true; // reply landed
+            }
+        }
+        return false; // timed out — user can retry / refresh
     };
 
     const fetchUpdates = async () => {
@@ -414,15 +433,10 @@ export default function IdeaDetail({ entry, onBack, onEntryUpdate }) {
             
             if (response.ok) {
                 setChatInput('');
-                await fetchChatMessages();
-                
-                // Poll for AI response
-                setTimeout(async () => {
-                    await fetchChatMessages();
-                }, 3000);
-                setTimeout(async () => {
-                    await fetchChatMessages();
-                }, 8000);
+                const afterSend = await fetchChatMessages();
+                const baselineAiCount = (afterSend || []).filter((m) => !m.is_user).length;
+                // Keep the loading indicator up until the AI reply arrives (or timeout).
+                await pollForAiReply(baselineAiCount);
             }
         } catch (error) {
             console.error('Error sending chat message:', error);

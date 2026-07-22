@@ -13,11 +13,13 @@ import ProfilePage from './pages/ProfilePage';
 import SettingsPage from './pages/SettingsPage';
 import AdminPage from './pages/AdminPage';
 import CollabWorkspacePage from './pages/CollabWorkspacePage';
+import WarmingBanner from './components/WarmingBanner';
 import { Toaster } from 'react-hot-toast';
 
 function App() {
   return (
     <AuthProvider>
+      <WarmingBanner />
       <Toaster 
         position="bottom-right" 
         toastOptions={{
