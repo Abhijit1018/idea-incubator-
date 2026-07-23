@@ -399,7 +399,7 @@ function TrendingSidebar({ entries, leaderboard, loading }) {
 }
 
 /* ─── Post Card (Twitter-like) ─── */
-function PostCard({ entry, index, onLike, onBookmark, onReact, onOpenConnect, onShare, onRemix }) {
+function PostCard({ entry, index, onLike, onBookmark, onReact, onOpenConnect, onShare, onRemix, onTag }) {
   const { isAuthenticated, user } = useAuth();
   const [showComments, setShowComments] = useState(false);
   const [showUpdates, setShowUpdates] = useState(false);
@@ -492,7 +492,7 @@ function PostCard({ entry, index, onLike, onBookmark, onReact, onOpenConnect, on
               {entry.tags?.length > 0 && entry.tags.slice(0, 3).map((tag, i) => (
                 <button 
                   key={i} 
-                  onClick={(e) => { e.stopPropagation(); setSearchQuery(tag); }}
+                  onClick={(e) => { e.stopPropagation(); onTag?.(tag); }}
                   className="text-xs text-mi-accent hover:underline font-body"
                 >
                   #{tag}
@@ -717,12 +717,15 @@ export default function CommunityPage() {
   const [leaderboard, setLeaderboard] = useState([]);
   const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
   const [shareEntry, setShareEntry] = useState(null);
+  const [tagFilter, setTagFilter] = useState('');
+  const [popularTags, setPopularTags] = useState([]);
 
   const fetchFeed = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams({ page: page.toString(), per_page: '20', sort: sortBy, type: filterType });
       if (searchQuery.trim()) params.set('q', searchQuery);
+      if (tagFilter) params.set('tag', tagFilter);
       const res = await authFetch(`/api/community/feed?${params}`);
       if (res.ok) {
         const data = await res.json();
@@ -732,7 +735,7 @@ export default function CommunityPage() {
       }
     } catch (e) { console.error('Failed to fetch feed', e); }
     finally { setLoading(false); }
-  }, [page, sortBy, filterType, searchQuery]);
+  }, [page, sortBy, filterType, searchQuery, tagFilter]);
 
   const fetchLeaderboard = useCallback(async () => {
     setLoadingLeaderboard(true);
@@ -745,7 +748,15 @@ export default function CommunityPage() {
 
   useEffect(() => { fetchFeed(); }, [fetchFeed]);
   useEffect(() => { fetchLeaderboard(); }, [fetchLeaderboard]);
-  useEffect(() => { setPage(1); }, [searchQuery, sortBy, filterType]);
+  useEffect(() => { setPage(1); }, [searchQuery, sortBy, filterType, tagFilter]);
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await authFetch('/api/community/tags');
+        if (res.ok) setPopularTags(await res.json());
+      } catch (e) { console.error('tags', e); }
+    })();
+  }, []);
 
   const handleLike = async (entryId) => {
     if (!isAuthenticated) return;
@@ -951,6 +962,33 @@ export default function CommunityPage() {
           </div>
         </motion.div>
 
+        {/* ── Popular tags / active tag filter ── */}
+        {(popularTags.length > 0 || tagFilter) && (
+          <div className="flex flex-wrap items-center gap-2 mb-6">
+            {tagFilter ? (
+              <button
+                onClick={() => setTagFilter('')}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-body bg-mi-accent/15 text-mi-accent border border-mi-accent/30"
+              >
+                #{tagFilter} <X size={12} />
+              </button>
+            ) : (
+              <>
+                <span className="text-xs text-mi-text-muted font-body mr-1">Explore tags:</span>
+                {popularTags.slice(0, 12).map((t) => (
+                  <button
+                    key={t.tag}
+                    onClick={() => setTagFilter(t.tag)}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-body bg-mi-surface border border-mi-border text-mi-text-secondary hover:text-white hover:border-mi-border-light transition-colors"
+                  >
+                    #{t.tag} <span className="text-mi-text-muted">{t.count}</span>
+                  </button>
+                ))}
+              </>
+            )}
+          </div>
+        )}
+
         {/* ── Feed & Sidebar ── */}
         <div className="grid grid-cols-1 lg:grid-cols-[1fr,320px] gap-10 items-start">
           {/* Main Feed */}
@@ -994,6 +1032,7 @@ export default function CommunityPage() {
                     onOpenConnect={(e) => setConnectModal({ open: true, entryId: e.id, ideaTitle: e.raw_input })}
                     onShare={(e) => setShareEntry(e)}
                     onRemix={handleRemix}
+                    onTag={setTagFilter}
                   />
                 ))}
               </div>
