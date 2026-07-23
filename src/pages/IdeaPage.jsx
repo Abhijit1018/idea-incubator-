@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { ArrowLeft, GitFork, Sparkles, Layers, ThumbsUp, ThumbsDown, Tag, ExternalLink } from 'lucide-react';
 import { authFetch } from '../lib/api';
 import { useAuth } from '../lib/AuthContext';
+import { ReactionRow, Reactors } from '../components/Reactions';
 import toast from 'react-hot-toast';
 
 function asArray(v) {
@@ -31,6 +32,19 @@ export default function IdeaPage() {
     })();
     return () => { alive = false; };
   }, [id]);
+
+  const react = async (type) => {
+    if (!isAuthenticated) { navigate('/login'); return; }
+    try {
+      const res = await authFetch(`/api/community/${id}/react`, {
+        method: 'POST', body: JSON.stringify({ reaction_type: type }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setEntry((e) => ({ ...e, reactions: data.reactions, user_reactions: data.user_reactions }));
+      }
+    } catch (e) { console.error('react', e); }
+  };
 
   const remix = async () => {
     if (!isAuthenticated) { navigate('/login'); return; }
@@ -143,10 +157,24 @@ export default function IdeaPage() {
           )}
 
           {tags.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mb-2">
+            <div className="flex flex-wrap gap-1.5 mb-4">
               {tags.map((t, i) => <span key={i} className="inline-flex items-center gap-1 text-xs text-mi-text-muted"><Tag size={11} />{t}</span>)}
             </div>
           )}
+
+          {/* Reactions */}
+          <div className="pt-4 border-t border-mi-border/60">
+            <p className="text-[11px] uppercase tracking-wide text-mi-text-muted mb-2">
+              {isAuthenticated ? 'How do you rate this idea?' : 'Community verdict'}
+            </p>
+            <ReactionRow
+              reactions={entry.reactions}
+              userReactions={entry.user_reactions}
+              onReact={react}
+              disabled={!isAuthenticated}
+            />
+            <Reactors entryId={entry.id} open={true} />
+          </div>
         </motion.article>
 
         {/* CTA */}

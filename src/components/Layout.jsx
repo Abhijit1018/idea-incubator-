@@ -47,6 +47,7 @@ function Navbar() {
     ...(isAuthenticated ? [
       { to: '/dashboard', label: 'Dashboard' },
       { to: '/publish', label: 'Publish' },
+      { to: '/bookmarks', label: 'Saved' },
     ] : []),
   ];
 
