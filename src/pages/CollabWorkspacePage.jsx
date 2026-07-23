@@ -37,13 +37,22 @@ function CollabBoard({ entryId }) {
 
   // Realtime + poll fallback.
   useEffect(() => {
-    const channel = supabase
-      .channel(`ws:${entryId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'workspace_tasks', filter: `catalog_entry_id=eq.${entryId}` }, fetchBoard)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'workspace_notes', filter: `catalog_entry_id=eq.${entryId}` }, fetchBoard)
-      .subscribe((status) => setLive(status === 'SUBSCRIBED'));
+    let channel;
+    let cancelled = false;
+    (async () => {
+      // Realtime must carry the user's JWT so the scoped RLS policy authorizes
+      // delivery of this project's workspace changes.
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) supabase.realtime.setAuth(session.access_token);
+      if (cancelled) return;
+      channel = supabase
+        .channel(`ws:${entryId}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'workspace_tasks', filter: `catalog_entry_id=eq.${entryId}` }, fetchBoard)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'workspace_notes', filter: `catalog_entry_id=eq.${entryId}` }, fetchBoard)
+        .subscribe((status) => setLive(status === 'SUBSCRIBED'));
+    })();
     const poll = setInterval(fetchBoard, 4000);
-    return () => { supabase.removeChannel(channel); clearInterval(poll); };
+    return () => { cancelled = true; if (channel) supabase.removeChannel(channel); clearInterval(poll); };
   }, [entryId, fetchBoard]);
 
   const addTask = async () => {
