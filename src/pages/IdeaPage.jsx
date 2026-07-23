@@ -33,8 +33,17 @@ export default function IdeaPage() {
     return () => { alive = false; };
   }, [id]);
 
+  const promptLogin = (verb = 'do that') => {
+    toast((t) => (
+      <span className="flex items-center gap-3">
+        <span className="text-sm">Sign in to {verb}.</span>
+        <button onClick={() => { toast.dismiss(t.id); navigate('/login'); }} className="px-2.5 py-1 rounded-md bg-mi-accent text-white text-xs font-medium hover:opacity-90">Sign in</button>
+      </span>
+    ), { id: 'auth-prompt', duration: 4000 });
+  };
+
   const react = async (type) => {
-    if (!isAuthenticated) { navigate('/login'); return; }
+    if (!isAuthenticated) { promptLogin('react to ideas'); return; }
     try {
       const res = await authFetch(`/api/community/${id}/react`, {
         method: 'POST', body: JSON.stringify({ reaction_type: type }),
@@ -47,7 +56,7 @@ export default function IdeaPage() {
   };
 
   const remix = async () => {
-    if (!isAuthenticated) { navigate('/login'); return; }
+    if (!isAuthenticated) { promptLogin('remix ideas'); return; }
     const t = toast.loading('Remixing…');
     try {
       const res = await authFetch(`/api/catalogs/${id}/remix`, { method: 'POST' });
@@ -171,7 +180,7 @@ export default function IdeaPage() {
               reactions={entry.reactions}
               userReactions={entry.user_reactions}
               onReact={react}
-              disabled={!isAuthenticated}
+              canReact={isAuthenticated}
             />
             <Reactors entryId={entry.id} open={true} />
           </div>

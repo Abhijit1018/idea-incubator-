@@ -33,11 +33,13 @@ export function ReactionBurst({ hex }) {
   );
 }
 
-/* A single reaction chip: pops on tap, glows when active, bursts when added. */
-export function ReactionPill({ r, count, isActive, disabled, onReact }) {
+/* A single reaction chip: pops on tap, glows when active, bursts when added.
+   When `canReact` is false (signed-out), it stays clickable so the parent can
+   prompt a sign-in — but it does not burst (no misleading success animation). */
+export function ReactionPill({ r, count, isActive, canReact = true, onReact }) {
   const [burstKey, setBurstKey] = useState(0);
   const handle = () => {
-    if (disabled) return;
+    if (!canReact) { onReact(r.type); return; }
     if (!isActive) setBurstKey((k) => k + 1);
     onReact(r.type);
   };
@@ -47,10 +49,9 @@ export function ReactionPill({ r, count, isActive, disabled, onReact }) {
       layout
       onClick={handle}
       whileTap={{ scale: 0.82 }}
-      disabled={disabled}
       className={`relative flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-body border transition-colors ${
         isActive ? 'bg-white/[0.07] border-transparent text-white' : 'bg-white/[0.03] border-mi-border hover:border-mi-border-light text-mi-text-muted hover:text-white'
-      } ${disabled ? 'cursor-default' : ''}`}
+      }`}
       style={isActive ? { boxShadow: `0 0 0 1px ${r.hex}66, 0 0 14px -2px ${r.hex}55` } : undefined}
       title={r.label}
     >
@@ -75,7 +76,7 @@ export function ReactionPill({ r, count, isActive, disabled, onReact }) {
 }
 
 /* Always-visible row of all five reaction chips (used on the shareable idea page). */
-export function ReactionRow({ reactions = {}, userReactions = [], onReact, disabled }) {
+export function ReactionRow({ reactions = {}, userReactions = [], onReact, canReact = true }) {
   return (
     <div className="flex flex-wrap gap-1.5">
       {REACTION_CONFIG.map((r) => (
@@ -84,7 +85,7 @@ export function ReactionRow({ reactions = {}, userReactions = [], onReact, disab
           r={r}
           count={reactions[r.type] || 0}
           isActive={(userReactions || []).includes(r.type)}
-          disabled={disabled}
+          canReact={canReact}
           onReact={onReact}
         />
       ))}

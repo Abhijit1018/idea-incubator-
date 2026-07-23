@@ -575,7 +575,7 @@ function PostCard({ entry, index, onLike, onBookmark, onReact, onOpenConnect, on
                       r={r}
                       count={count}
                       isActive={isActive}
-                      disabled={!isAuthenticated}
+                      canReact={isAuthenticated}
                       onReact={(type) => onReact(entry.id, type)}
                     />
                   </motion.div>
@@ -633,7 +633,7 @@ function PostCard({ entry, index, onLike, onBookmark, onReact, onOpenConnect, on
             </motion.span>
             <span>{totalReactions}</span>
           </motion.button>
-          {isAuthenticated && !isOwner && (
+          {!isOwner && (
             <button
               onClick={() => onOpenConnect(entry)}
               disabled={entry.connect_sent}
@@ -648,7 +648,7 @@ function PostCard({ entry, index, onLike, onBookmark, onReact, onOpenConnect, on
               <span>{entry.connect_sent ? 'Sent' : 'Connect'}</span>
             </button>
           )}
-          {isAuthenticated && !isOwner && (
+          {!isOwner && (
             <button
               onClick={() => onRemix(entry)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all font-body text-xs text-mi-text-muted hover:text-mi-accent hover:bg-mi-accent/5"
@@ -764,9 +764,24 @@ export default function CommunityPage() {
     })();
   }, []);
 
+  // Nudge signed-out visitors to log in instead of silently ignoring their action.
+  const promptLogin = (verb = 'do that') => {
+    toast((t) => (
+      <span className="flex items-center gap-3">
+        <span className="text-sm">Sign in to {verb}.</span>
+        <button
+          onClick={() => { toast.dismiss(t.id); navigate('/login'); }}
+          className="px-2.5 py-1 rounded-md bg-mi-accent text-white text-xs font-medium hover:opacity-90"
+        >
+          Sign in
+        </button>
+      </span>
+    ), { id: 'auth-prompt', duration: 4000 });
+  };
+
   const handleLike = async (entryId) => {
-    if (!isAuthenticated) return;
-    
+    if (!isAuthenticated) { promptLogin('like ideas'); return; }
+
     // Optimistic UI Update
     setEntries(prev => prev.map(e => {
       if (e.id === entryId) {
@@ -790,7 +805,7 @@ export default function CommunityPage() {
   };
 
   const handleBookmark = async (entryId) => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated) { promptLogin('save ideas'); return; }
 
     // Optimistic UI Update
     setEntries(prev => prev.map(e => e.id === entryId ? { ...e, bookmarked_by_user: !e.bookmarked_by_user } : e));
@@ -805,8 +820,8 @@ export default function CommunityPage() {
   };
 
   const handleReact = async (entryId, reactionType) => {
-    if (!isAuthenticated) return;
-    
+    if (!isAuthenticated) { promptLogin('react to ideas'); return; }
+
     // Optimistic UI Update
     setEntries(prev => prev.map(e => {
       if (e.id === entryId) {
@@ -841,7 +856,7 @@ export default function CommunityPage() {
   };
 
   const handleRemix = async (entry) => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated) { promptLogin('remix ideas'); return; }
     const t = toast.loading('Remixing idea…');
     try {
       const res = await authFetch(`/api/catalogs/${entry.id}/remix`, { method: 'POST' });
@@ -1052,7 +1067,7 @@ export default function CommunityPage() {
                     onLike={handleLike}
                     onBookmark={handleBookmark}
                     onReact={handleReact}
-                    onOpenConnect={(e) => setConnectModal({ open: true, entryId: e.id, ideaTitle: e.raw_input })}
+                    onOpenConnect={(e) => isAuthenticated ? setConnectModal({ open: true, entryId: e.id, ideaTitle: e.raw_input }) : promptLogin('collaborate on ideas')}
                     onShare={(e) => setShareEntry(e)}
                     onRemix={handleRemix}
                     onTag={setTagFilter}
