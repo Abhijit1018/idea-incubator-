@@ -723,10 +723,16 @@ export default function CommunityPage() {
   const fetchFeed = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ page: page.toString(), per_page: '20', sort: sortBy, type: filterType });
-      if (searchQuery.trim()) params.set('q', searchQuery);
-      if (tagFilter) params.set('tag', tagFilter);
-      const res = await authFetch(`/api/community/feed?${params}`);
+      let url;
+      if (sortBy === 'following') {
+        url = `/api/feed/following?page=${page}&per_page=20`;
+      } else {
+        const params = new URLSearchParams({ page: page.toString(), per_page: '20', sort: sortBy, type: filterType });
+        if (searchQuery.trim()) params.set('q', searchQuery);
+        if (tagFilter) params.set('tag', tagFilter);
+        url = `/api/community/feed?${params}`;
+      }
+      const res = await authFetch(url);
       if (res.ok) {
         const data = await res.json();
         setEntries(data.entries || []);
@@ -939,6 +945,17 @@ export default function CommunityPage() {
                 <Flame size={14} />
                 Trending
               </button>
+              {isAuthenticated && (
+                <button
+                  onClick={() => setSortBy('following')}
+                  className={`flex items-center gap-1.5 px-4 py-2.5 font-body text-xs transition-colors ${
+                    sortBy === 'following' ? 'bg-mi-accent/10 text-mi-accent' : 'text-mi-text-muted hover:text-white'
+                  }`}
+                >
+                  <Users size={14} />
+                  Following
+                </button>
+              )}
             </div>
 
             <div className="flex bg-mi-surface border border-mi-border rounded-xl overflow-hidden">
@@ -999,13 +1016,19 @@ export default function CommunityPage() {
             </div>
           ) : entries.length === 0 ? (
             <div className="py-10 border border-dashed border-mi-border bg-mi-surface/50 rounded-2xl">
-              <EmptyState 
+              <EmptyState
                 icon={Users}
-                title={searchQuery ? 'NO RESULTS FOUND' : 'NO IDEAS YET'}
-                description={searchQuery
+                title={sortBy === 'following' ? 'YOUR FEED IS QUIET' : searchQuery ? 'NO RESULTS FOUND' : tagFilter ? 'NO IDEAS WITH THIS TAG' : 'NO IDEAS YET'}
+                description={sortBy === 'following'
+                  ? 'Follow builders from their profiles to see their newest ideas here.'
+                  : searchQuery
                   ? 'Try a different search term.'
+                  : tagFilter
+                  ? 'No published ideas use this tag yet.'
                   : 'Be the first to share your idea with the community!'}
-                action={isAuthenticated ? (
+                action={sortBy === 'following' ? (
+                  <button onClick={() => setSortBy('recent')} className="btn-primary mt-4"><Users size={16} /> Browse builders</button>
+                ) : isAuthenticated ? (
                   <Link to="/publish" className="btn-primary mt-4">
                     <Flame size={16} />
                     Publish an Idea

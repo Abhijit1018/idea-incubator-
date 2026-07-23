@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Github, Twitter, ArrowLeft, Lightbulb, Flame, Calendar, ExternalLink, Eye, DollarSign, Hammer, Wrench } from 'lucide-react';
+import { Github, Twitter, ArrowLeft, Lightbulb, Flame, Calendar, ExternalLink, Eye, DollarSign, Hammer, Wrench, UserPlus, UserCheck, Users } from 'lucide-react';
 import { authFetch } from '../lib/api';
+import { useAuth } from '../lib/AuthContext';
 import { ProfileSkeleton } from '../components/SkeletonLoaders';
+import toast from 'react-hot-toast';
 
 const REACTION_LABELS = {
   brilliant: { icon: Lightbulb, label: 'Brilliant', color: 'text-yellow-400' },
@@ -15,20 +17,50 @@ const REACTION_LABELS = {
 
 export default function ProfilePage() {
   const { userId } = useParams();
+  const { isAuthenticated } = useAuth();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [following, setFollowing] = useState(false);
+  const [followerCount, setFollowerCount] = useState(0);
+  const [followBusy, setFollowBusy] = useState(false);
 
   useEffect(() => {
     const fetchProfile = async () => {
       setLoading(true);
       try {
         const res = await authFetch(`/api/profile/${userId}`);
-        if (res.ok) setProfile(await res.json());
+        if (res.ok) {
+          const p = await res.json();
+          setProfile(p);
+          setFollowing(!!p.is_following);
+          setFollowerCount(p.follower_count || 0);
+        }
       } catch (e) { console.error(e); }
       finally { setLoading(false); }
     };
     fetchProfile();
   }, [userId]);
+
+  const handleFollow = async () => {
+    if (!isAuthenticated) { toast('Sign in to follow builders'); return; }
+    setFollowBusy(true);
+    // optimistic
+    const prev = following;
+    setFollowing(!prev);
+    setFollowerCount((c) => c + (prev ? -1 : 1));
+    try {
+      const res = await authFetch(`/api/users/${userId}/follow`, { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        setFollowing(data.following);
+        setFollowerCount(data.follower_count);
+      } else {
+        setFollowing(prev); setFollowerCount((c) => c + (prev ? 1 : -1));
+      }
+    } catch {
+      setFollowing(prev); setFollowerCount((c) => c + (prev ? 1 : -1));
+    } finally { setFollowBusy(false); }
+  };
 
   if (loading) {
     return (
@@ -79,9 +111,32 @@ export default function ProfilePage() {
             </div>
 
             <div className="flex-1">
-              <h1 className="font-heading text-3xl tracking-wide text-white">{profile.name}</h1>
-              {profile.bio && <p className="font-body text-sm text-mi-text-secondary mt-2 max-w-lg">{profile.bio}</p>}
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h1 className="font-heading text-3xl tracking-wide text-white">{profile.name}</h1>
+                  {profile.bio && <p className="font-body text-sm text-mi-text-secondary mt-2 max-w-lg">{profile.bio}</p>}
+                </div>
+                {!profile.is_self && (
+                  <button
+                    onClick={handleFollow}
+                    disabled={followBusy}
+                    className={`shrink-0 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all disabled:opacity-60 ${
+                      following
+                        ? 'bg-white/5 border border-mi-border text-mi-text-secondary hover:text-white'
+                        : 'bg-mi-accent text-white hover:opacity-90'
+                    }`}
+                  >
+                    {following ? <><UserCheck size={15} /> Following</> : <><UserPlus size={15} /> Follow</>}
+                  </button>
+                )}
+              </div>
               <div className="flex flex-wrap items-center gap-4 mt-3">
+                <span className="flex items-center gap-1.5 text-xs text-mi-text-secondary font-body">
+                  <Users size={13} /> <strong className="text-white">{followerCount}</strong> followers
+                </span>
+                <span className="flex items-center gap-1.5 text-xs text-mi-text-muted font-body">
+                  <strong className="text-white">{profile.following_count || 0}</strong> following
+                </span>
                 <span className="flex items-center gap-1.5 text-xs text-mi-text-muted font-body">
                   <Calendar size={13} /> Member since {memberSince}
                 </span>
