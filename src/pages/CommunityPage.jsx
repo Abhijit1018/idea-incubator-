@@ -16,12 +16,75 @@ import { PostCardSkeleton } from '../components/SkeletonLoaders';
 import EmptyState from '../components/EmptyState';
 
 const REACTION_CONFIG = [
-  { type: 'brilliant', icon: Lightbulb, label: 'Brilliant', color: 'text-yellow-400' },
-  { type: 'interested', icon: Eye, label: 'Interested', color: 'text-blue-400' },
-  { type: 'sellable', icon: DollarSign, label: 'Sellable', color: 'text-green-400' },
-  { type: 'build_worthy', icon: Hammer, label: 'Build-worthy', color: 'text-orange-400' },
-  { type: 'needs_work', icon: Wrench, label: 'Needs work', color: 'text-mi-text-muted' },
+  { type: 'brilliant',    icon: Lightbulb,  label: 'Brilliant',    color: 'text-yellow-300', hex: '#facc15' },
+  { type: 'interested',   icon: Eye,        label: 'Interested',   color: 'text-blue-300',   hex: '#60a5fa' },
+  { type: 'sellable',     icon: DollarSign, label: 'Sellable',     color: 'text-green-300',  hex: '#4ade80' },
+  { type: 'build_worthy', icon: Hammer,     label: 'Build-worthy', color: 'text-orange-300', hex: '#fb923c' },
+  { type: 'needs_work',   icon: Wrench,     label: 'Needs work',   color: 'text-slate-300',  hex: '#94a3b8' },
 ];
+const REACTION_BY_TYPE = Object.fromEntries(REACTION_CONFIG.map((r) => [r.type, r]));
+
+/* Particle burst emitted when a reaction is added — the signature micro-moment. */
+function ReactionBurst({ hex }) {
+  const bits = [0, 1, 2, 3, 4, 5];
+  return (
+    <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
+      {bits.map((i) => {
+        const angle = (i / bits.length) * Math.PI * 2;
+        return (
+          <motion.span
+            key={i}
+            initial={{ opacity: 1, x: 0, y: 0, scale: 1 }}
+            animate={{ opacity: 0, x: Math.cos(angle) * 22, y: Math.sin(angle) * 22, scale: 0.2 }}
+            transition={{ duration: 0.5, ease: 'easeOut' }}
+            style={{ position: 'absolute', width: 5, height: 5, borderRadius: 9999, background: hex }}
+          />
+        );
+      })}
+    </span>
+  );
+}
+
+/* A single reaction chip: pops on tap, glows when active, bursts when added. */
+function ReactionPill({ r, count, isActive, disabled, onReact }) {
+  const [burstKey, setBurstKey] = useState(0);
+  const handle = () => {
+    if (disabled) return;
+    if (!isActive) setBurstKey((k) => k + 1); // burst only on add, not un-react
+    onReact(r.type);
+  };
+  return (
+    <motion.button
+      type="button"
+      layout
+      onClick={handle}
+      whileTap={{ scale: 0.82 }}
+      disabled={disabled}
+      className={`relative flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-body border transition-colors ${
+        isActive ? 'bg-white/[0.07] border-transparent text-white' : 'bg-white/[0.03] border-mi-border hover:border-mi-border-light text-mi-text-muted hover:text-white'
+      } ${disabled ? 'cursor-default' : ''}`}
+      style={isActive ? { boxShadow: `0 0 0 1px ${r.hex}66, 0 0 14px -2px ${r.hex}55` } : undefined}
+      title={r.label}
+    >
+      <motion.span animate={isActive ? { scale: [1, 1.35, 1] } : { scale: 1 }} transition={{ duration: 0.3 }} className="flex">
+        <r.icon size={13} style={isActive ? { color: r.hex } : undefined} />
+      </motion.span>
+      <AnimatePresence mode="popLayout" initial={false}>
+        {count > 0 && (
+          <motion.span
+            key={count}
+            initial={{ y: 6, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -6, opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            className="tabular-nums"
+          >
+            {count}
+          </motion.span>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>{burstKey > 0 && <ReactionBurst key={burstKey} hex={r.hex} />}</AnimatePresence>
+    </motion.button>
+  );
+}
 
 /* ─── Comment Thread ─── */
 function CommentSection({ entryId, isOpen, onClose }) {
@@ -443,6 +506,17 @@ function PostCard({ entry, index, onLike, onBookmark, onReact, onOpenConnect, on
   const authorInitial = authorName[0].toUpperCase();
   const totalReactions = entry.reactions ? Object.values(entry.reactions).reduce((a, b) => a + b, 0) : 0;
 
+  // The idea's dominant community verdict (top reaction), surfaced at a glance.
+  const topReaction = (() => {
+    if (!entry.reactions) return null;
+    let best = null;
+    for (const r of REACTION_CONFIG) {
+      const c = entry.reactions[r.type] || 0;
+      if (c > 0 && (!best || c > best.count)) best = { ...r, count: c };
+    }
+    return best;
+  })();
+
   const [showShare, setShowShare] = useState(false);
 
   return (
@@ -503,9 +577,20 @@ function PostCard({ entry, index, onLike, onBookmark, onReact, onOpenConnect, on
 
       {/* Content */}
       <div className="px-5 py-4">
-        <h3 className="font-heading text-xl tracking-wide text-white mb-2 leading-tight">
-          {entry.raw_input}
-        </h3>
+        <div className="flex items-start justify-between gap-3 mb-2">
+          <h3 className="font-heading text-xl tracking-wide text-white leading-tight">
+            {entry.raw_input}
+          </h3>
+          {topReaction && (
+            <span
+              className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-body whitespace-nowrap"
+              style={{ color: topReaction.hex, background: `${topReaction.hex}1a`, boxShadow: `inset 0 0 0 1px ${topReaction.hex}33` }}
+              title={`Community verdict: ${topReaction.label}`}
+            >
+              <topReaction.icon size={12} /> {topReaction.label}
+            </span>
+          )}
+        </div>
         {entry.summary && (
           <div className="mb-3">
             <p className={`font-body text-sm text-mi-text-secondary leading-relaxed ${!expanded && 'line-clamp-3'}`}>
@@ -533,31 +618,42 @@ function PostCard({ entry, index, onLike, onBookmark, onReact, onOpenConnect, on
         )}
       </div>
 
-      {/* Reaction Bar */}
-      {(totalReactions > 0 || showReactions) && (
-        <div className="px-5 pb-2 flex flex-wrap gap-1.5">
-          {REACTION_CONFIG.map((r) => {
-            const count = entry.reactions?.[r.type] || 0;
-            const isActive = entry.user_reactions?.includes(r.type);
-            if (count === 0 && !showReactions) return null;
-            return (
-              <button
-                key={r.type}
-                onClick={() => isAuthenticated && onReact(entry.id, r.type)}
-                className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-body transition-all duration-200 border ${
-                  isActive
-                    ? 'bg-mi-accent/10 border-mi-accent/30 text-white'
-                    : 'bg-white/3 border-mi-border hover:border-mi-border-light text-mi-text-muted hover:text-white'
-                }`}
-                title={r.label}
-              >
-                <r.icon size={13} className={isActive ? r.color : ''} />
-                {count > 0 && <span>{count}</span>}
-              </button>
-            );
-          })}
-        </div>
-      )}
+      {/* Reaction Bar — animated tray */}
+      <AnimatePresence initial={false}>
+        {(totalReactions > 0 || showReactions) && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.22, ease: 'easeOut' }}
+            className="px-5 pb-2 overflow-hidden"
+          >
+            <div className="flex flex-wrap gap-1.5 pt-0.5">
+              {REACTION_CONFIG.map((r, i) => {
+                const count = entry.reactions?.[r.type] || 0;
+                const isActive = entry.user_reactions?.includes(r.type);
+                if (count === 0 && !showReactions) return null;
+                return (
+                  <motion.div
+                    key={r.type}
+                    initial={showReactions ? { opacity: 0, y: 8, scale: 0.9 } : false}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    transition={{ delay: showReactions ? i * 0.035 : 0, type: 'spring', stiffness: 500, damping: 28 }}
+                  >
+                    <ReactionPill
+                      r={r}
+                      count={count}
+                      isActive={isActive}
+                      disabled={!isAuthenticated}
+                      onReact={(type) => onReact(entry.id, type)}
+                    />
+                  </motion.div>
+                );
+              })}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Actions bar */}
       <div className="px-5 py-3 border-t border-mi-border/50 flex items-center justify-between">
@@ -587,19 +683,24 @@ function PostCard({ entry, index, onLike, onBookmark, onReact, onOpenConnect, on
             }`}
             title="Like"
           >
-            <Heart size={15} fill={entry.liked_by_user ? 'currentColor' : 'none'} />
+            <motion.span animate={entry.liked_by_user ? { scale: [1, 1.4, 1] } : { scale: 1 }} transition={{ duration: 0.3 }} className="flex">
+              <Heart size={15} fill={entry.liked_by_user ? 'currentColor' : 'none'} />
+            </motion.span>
             <span>{entry.like_count || 0}</span>
           </button>
-          <button
+          <motion.button
+            whileTap={{ scale: 0.9 }}
             onClick={() => setShowReactions(!showReactions)}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all font-body text-xs ${
               showReactions ? 'text-yellow-400 bg-yellow-400/5' : 'text-mi-text-muted hover:text-yellow-400 hover:bg-yellow-400/5'
             }`}
             title="React"
           >
-            <Flame size={15} />
+            <motion.span animate={showReactions ? { rotate: [0, -12, 12, 0] } : {}} transition={{ duration: 0.4 }} className="flex">
+              <Flame size={15} />
+            </motion.span>
             <span>{totalReactions}</span>
-          </button>
+          </motion.button>
           {isAuthenticated && !isOwner && (
             <button
               onClick={() => onOpenConnect(entry)}
