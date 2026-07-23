@@ -17,6 +17,7 @@ const PublishPage = lazy(() => import('./pages/PublishPage'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 const IdeaPage = lazy(() => import('./pages/IdeaPage'));
 const BookmarksPage = lazy(() => import('./pages/BookmarksPage'));
+const NetworkPage = lazy(() => import('./pages/NetworkPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const AdminPage = lazy(() => import('./pages/AdminPage'));
 const CollabWorkspacePage = lazy(() => import('./pages/CollabWorkspacePage'));
@@ -99,6 +100,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <BookmarksPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/network"
+              element={
+                <ProtectedRoute>
+                  <NetworkPage />
                 </ProtectedRoute>
               }
             />

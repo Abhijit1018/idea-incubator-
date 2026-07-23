@@ -131,12 +131,12 @@ export default function ProfilePage() {
                 )}
               </div>
               <div className="flex flex-wrap items-center gap-4 mt-3">
-                <span className="flex items-center gap-1.5 text-xs text-mi-text-secondary font-body">
+                <Link to={`/network?user=${userId}&tab=followers`} className="flex items-center gap-1.5 text-xs text-mi-text-secondary font-body hover:text-white transition-colors">
                   <Users size={13} /> <strong className="text-white">{followerCount}</strong> followers
-                </span>
-                <span className="flex items-center gap-1.5 text-xs text-mi-text-muted font-body">
+                </Link>
+                <Link to={`/network?user=${userId}&tab=following`} className="flex items-center gap-1.5 text-xs text-mi-text-muted font-body hover:text-white transition-colors">
                   <strong className="text-white">{profile.following_count || 0}</strong> following
-                </span>
+                </Link>
                 <span className="flex items-center gap-1.5 text-xs text-mi-text-muted font-body">
                   <Calendar size={13} /> Member since {memberSince}
                 </span>
