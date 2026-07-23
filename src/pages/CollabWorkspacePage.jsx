@@ -1,8 +1,163 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { Users, ArrowLeft, Loader2, AlertTriangle, Handshake, Tag } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Users, ArrowLeft, Loader2, AlertTriangle, Handshake, Tag, Plus, Trash2, ChevronLeft, ChevronRight, Check, Wifi } from 'lucide-react';
 import { authFetch } from '../lib/api';
+import { supabase } from '../lib/supabase';
+
+const COLUMNS = [
+  { key: 'todo', label: 'To do' },
+  { key: 'doing', label: 'In progress' },
+  { key: 'done', label: 'Done' },
+];
+
+/* Live shared task board + notes. Supabase Realtime pushes instant updates when
+   available; a 4s poll guarantees sync regardless of Realtime config. */
+function CollabBoard({ entryId }) {
+  const [tasks, setTasks] = useState([]);
+  const [notes, setNotes] = useState('');
+  const [newTitle, setNewTitle] = useState('');
+  const [noteStatus, setNoteStatus] = useState('saved'); // saved | saving
+  const [live, setLive] = useState(false);
+  const notesFocused = useRef(false);
+  const saveTimer = useRef(null);
+
+  const fetchBoard = useCallback(async () => {
+    try {
+      const res = await authFetch(`/api/catalogs/${entryId}/workspace`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setTasks(data.tasks || []);
+      // Don't overwrite the notes box while the user is actively editing it.
+      if (!notesFocused.current) setNotes(data.notes?.content || '');
+    } catch { /* ignore */ }
+  }, [entryId]);
+
+  useEffect(() => { fetchBoard(); }, [fetchBoard]);
+
+  // Realtime + poll fallback.
+  useEffect(() => {
+    const channel = supabase
+      .channel(`ws:${entryId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'workspace_tasks', filter: `catalog_entry_id=eq.${entryId}` }, fetchBoard)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'workspace_notes', filter: `catalog_entry_id=eq.${entryId}` }, fetchBoard)
+      .subscribe((status) => setLive(status === 'SUBSCRIBED'));
+    const poll = setInterval(fetchBoard, 4000);
+    return () => { supabase.removeChannel(channel); clearInterval(poll); };
+  }, [entryId, fetchBoard]);
+
+  const addTask = async () => {
+    const title = newTitle.trim();
+    if (!title) return;
+    setNewTitle('');
+    await authFetch(`/api/catalogs/${entryId}/tasks`, { method: 'POST', body: JSON.stringify({ title }) });
+    fetchBoard();
+  };
+
+  const moveTask = async (task, dir) => {
+    const idx = COLUMNS.findIndex((c) => c.key === task.status);
+    const next = COLUMNS[idx + dir];
+    if (!next) return;
+    setTasks((prev) => prev.map((t) => t.id === task.id ? { ...t, status: next.key } : t)); // optimistic
+    await authFetch(`/api/catalogs/${entryId}/tasks/${task.id}`, { method: 'PUT', body: JSON.stringify({ status: next.key }) });
+    fetchBoard();
+  };
+
+  const removeTask = async (task) => {
+    setTasks((prev) => prev.filter((t) => t.id !== task.id));
+    await authFetch(`/api/catalogs/${entryId}/tasks/${task.id}`, { method: 'DELETE' });
+    fetchBoard();
+  };
+
+  const onNotesChange = (val) => {
+    setNotes(val);
+    setNoteStatus('saving');
+    clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(async () => {
+      await authFetch(`/api/catalogs/${entryId}/notes`, { method: 'PUT', body: JSON.stringify({ content: val }) });
+      setNoteStatus('saved');
+    }, 900);
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Task board */}
+      <div className="p-6 rounded-xl bg-mi-surface border border-mi-border">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-heading text-lg tracking-wide text-white">Task board</h2>
+          <span className={`inline-flex items-center gap-1.5 text-[11px] font-body ${live ? 'text-green-400' : 'text-mi-text-muted'}`} title={live ? 'Live sync on' : 'Syncing every few seconds'}>
+            <Wifi size={12} /> {live ? 'Live' : 'Synced'}
+          </span>
+        </div>
+
+        <div className="flex gap-2 mb-5">
+          <input
+            value={newTitle}
+            onChange={(e) => setNewTitle(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') addTask(); }}
+            placeholder="Add a task and press Enter…"
+            className="input-editorial flex-1 py-2.5 text-sm"
+          />
+          <button onClick={addTask} disabled={!newTitle.trim()} className="p-2.5 rounded-xl bg-mi-accent text-white hover:opacity-90 transition disabled:opacity-30">
+            <Plus size={16} />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {COLUMNS.map((col, ci) => {
+            const colTasks = tasks.filter((t) => t.status === col.key);
+            return (
+              <div key={col.key} className="rounded-xl bg-mi-bg/40 border border-mi-border/60 p-3 min-h-[120px]">
+                <div className="flex items-center justify-between mb-2 px-1">
+                  <span className="text-[11px] uppercase tracking-wide text-mi-text-muted">{col.label}</span>
+                  <span className="text-[11px] text-mi-text-muted">{colTasks.length}</span>
+                </div>
+                <div className="space-y-2">
+                  <AnimatePresence initial={false}>
+                    {colTasks.map((t) => (
+                      <motion.div
+                        key={t.id}
+                        layout
+                        initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }}
+                        className={`group rounded-lg bg-mi-surface border border-mi-border p-2.5 ${col.key === 'done' ? 'opacity-70' : ''}`}
+                      >
+                        <p className={`text-sm text-white break-words ${col.key === 'done' ? 'line-through text-mi-text-muted' : ''}`}>{t.title}</p>
+                        <div className="flex items-center gap-1 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button onClick={() => moveTask(t, -1)} disabled={ci === 0} className="p-1 rounded text-mi-text-muted hover:text-white disabled:opacity-20" title="Move left"><ChevronLeft size={14} /></button>
+                          <button onClick={() => moveTask(t, 1)} disabled={ci === COLUMNS.length - 1} className="p-1 rounded text-mi-text-muted hover:text-white disabled:opacity-20" title="Move right"><ChevronRight size={14} /></button>
+                          <button onClick={() => removeTask(t)} className="p-1 rounded text-mi-text-muted hover:text-red-400 ml-auto" title="Delete"><Trash2 size={13} /></button>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+                  {colTasks.length === 0 && <p className="text-xs text-mi-text-muted/60 px-1 py-2">—</p>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Shared notes */}
+      <div className="p-6 rounded-xl bg-mi-surface border border-mi-border">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-heading text-lg tracking-wide text-white">Shared notes</h2>
+          <span className="inline-flex items-center gap-1.5 text-[11px] text-mi-text-muted font-body">
+            {noteStatus === 'saving' ? <><Loader2 size={12} className="animate-spin" /> Saving…</> : <><Check size={12} className="text-green-400" /> Saved</>}
+          </span>
+        </div>
+        <textarea
+          value={notes}
+          onChange={(e) => onNotesChange(e.target.value)}
+          onFocus={() => { notesFocused.current = true; }}
+          onBlur={() => { notesFocused.current = false; }}
+          placeholder="Shared scratchpad — decisions, links, next steps. Both of you see edits live."
+          className="input-editorial w-full min-h-[160px] py-3 text-sm resize-y leading-relaxed"
+        />
+      </div>
+    </div>
+  );
+}
 
 export default function CollabWorkspacePage() {
   const { requestId } = useParams();
@@ -72,6 +227,11 @@ export default function CollabWorkspacePage() {
             {ROLE_LABELS[role] || role}
           </span>
         </motion.div>
+
+        {/* Live shared workspace */}
+        <div className="mb-8">
+          <CollabBoard entryId={entry.id} />
+        </div>
 
         {(entry.tags || []).length > 0 && (
           <div className="flex flex-wrap gap-2 mb-6">
