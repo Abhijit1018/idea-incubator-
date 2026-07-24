@@ -243,7 +243,7 @@ export default function ProfilePage() {
                       </div>
                       {idea.image_url && (
                         <div className="w-20 h-20 rounded-xl overflow-hidden shrink-0 border border-mi-border">
-                          <img src={idea.image_url} alt="" className="w-full h-full object-cover" />
+                          <img src={idea.image_url} alt="" className="w-full h-full object-cover" onError={(e) => { e.currentTarget.parentElement.style.display = 'none'; }} />
                         </div>
                       )}
                     </div>

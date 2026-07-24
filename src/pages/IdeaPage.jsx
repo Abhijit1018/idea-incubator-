@@ -121,7 +121,7 @@ export default function IdeaPage() {
           <h1 className="font-display text-2xl sm:text-3xl text-white leading-tight mb-4">{entry.raw_input}</h1>
 
           {entry.image_url && (
-            <img src={entry.image_url} alt="" className="w-full rounded-xl border border-mi-border mb-5 max-h-80 object-cover" />
+            <img src={entry.image_url} alt="" className="w-full rounded-xl border border-mi-border mb-5 max-h-80 object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
           )}
 
           {entry.summary && (

@@ -289,7 +289,7 @@ export default function CollabWorkspacePage() {
             transition={{ delay: 0.2 }}
             className="rounded-xl overflow-hidden border border-mi-border mb-4"
           >
-            <img src={entry.image_url} alt={entry.raw_input} className="w-full object-cover max-h-64" />
+            <img src={entry.image_url} alt={entry.raw_input} className="w-full object-cover max-h-64" onError={(e) => { e.currentTarget.parentElement.style.display = 'none'; }} />
           </motion.div>
         )}
 

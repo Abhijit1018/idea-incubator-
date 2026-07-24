@@ -544,7 +544,7 @@ function PostCard({ entry, index, onLike, onBookmark, onReact, onOpenConnect, on
         )}
         {entry.image_url && (
           <div className="mt-3 rounded-xl overflow-hidden border border-mi-border">
-            <img src={entry.image_url} alt={entry.raw_input} className="w-full h-40 sm:h-48 object-cover hover:scale-105 transition-transform duration-500" loading="lazy" />
+            <img src={entry.image_url} alt={entry.raw_input} className="w-full h-40 sm:h-48 object-cover hover:scale-105 transition-transform duration-500" loading="lazy" onError={(e) => { e.currentTarget.parentElement.style.display = 'none'; }} />
           </div>
         )}
       </div>

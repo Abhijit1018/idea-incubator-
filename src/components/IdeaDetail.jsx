@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import mermaid from 'mermaid';
-import { ArrowLeft, Layers, Zap, AlertTriangle, GitBranch, ArrowRight, CheckCircle2, MessageSquare, Search, Send, Check, X, Pencil, Bot, ChevronDown, ChevronUp, ArrowDown, Globe, Lock, Terminal, HelpCircle, RefreshCw, Download, BarChart3, Eye, GitFork } from 'lucide-react';
+import { ArrowLeft, Layers, Zap, AlertTriangle, GitBranch, ArrowRight, CheckCircle2, MessageSquare, Search, Send, Check, X, Pencil, Bot, ChevronDown, ChevronUp, ArrowDown, Globe, Lock, Terminal, HelpCircle, RefreshCw, Download, BarChart3, Eye, GitFork, ImageOff } from 'lucide-react';
 import { authFetch } from '../lib/api';
 import ReactMarkdown from 'react-markdown';
 import { useAuth } from '../lib/AuthContext';
@@ -12,6 +12,41 @@ mermaid.initialize({
     securityLevel: 'loose',
     fontFamily: '"Space Grotesk", sans-serif',
 });
+
+function ConceptImage({ src }) {
+    const [state, setState] = useState('loading'); // 'loading' | 'loaded' | 'error'
+
+    // Reset when the src changes (e.g. after regenerate).
+    useEffect(() => { setState('loading'); }, [src]);
+
+    if (state === 'error') {
+        return (
+            <div className="w-full h-full flex flex-col items-center justify-center gap-3 text-neo-muted p-6 text-center">
+                <ImageOff size={36} strokeWidth={1.5} />
+                <span className="font-display text-xs uppercase tracking-widest">Visual unavailable</span>
+                <span className="font-sans text-[11px] leading-snug opacity-70">Owner can Regenerate to rebuild it.</span>
+            </div>
+        );
+    }
+
+    return (
+        <div className="relative w-full h-full">
+            {state === 'loading' && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="w-10 h-10 border-4 border-neo-border border-t-neo-accent rounded-full animate-spin" />
+                </div>
+            )}
+            <img
+                src={src}
+                alt="Concept visualization"
+                loading="lazy"
+                onLoad={() => setState('loaded')}
+                onError={() => setState('error')}
+                className={`w-full h-full object-cover filter grayscale-[20%] hover:grayscale-0 transition-all duration-500 ${state === 'loaded' ? 'opacity-100' : 'opacity-0'}`}
+            />
+        </div>
+    );
+}
 
 function MermaidDiagram({ chart }) {
     const ref = useRef(null);
@@ -717,7 +752,7 @@ export default function IdeaDetail({ entry, onBack, onEntryUpdate }) {
                     {image_url && (
                         <div className="lg:w-1/3 shrink-0">
                             <div className="w-full aspect-square bg-neo-border border-2 border-black shadow-[4px_4px_0px_0px_rgba(255,255,255,0.1)] overflow-hidden">
-                                <img src={image_url} alt="Concept visualization" className="w-full h-full object-cover filter grayscale-[20%] hover:grayscale-0 transition-all duration-500" />
+                                <ConceptImage src={image_url} />
                             </div>
                         </div>
                     )}

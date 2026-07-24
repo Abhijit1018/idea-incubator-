@@ -165,7 +165,7 @@ export default function NetworkPage() {
 function ProjectRow({ p, subtitle, members }) {
   return (
     <div className="flex items-center gap-3 p-4 rounded-2xl bg-mi-surface border border-mi-border hover:border-mi-border-light transition-colors group">
-      {p.image_url && <img src={p.image_url} alt="" className="w-11 h-11 rounded-lg object-cover shrink-0 border border-mi-border" />}
+      {p.image_url && <img src={p.image_url} alt="" className="w-11 h-11 rounded-lg object-cover shrink-0 border border-mi-border" onError={(e) => { e.currentTarget.style.display = 'none'; }} />}
       <div className="min-w-0 flex-1">
         <Link to={`/idea/${p.id}`} className="font-body font-medium text-white hover:text-mi-accent transition-colors truncate inline-flex items-center gap-1">
           {p.raw_input} <ArrowUpRight size={13} className="opacity-0 group-hover:opacity-100 transition-opacity" />
