@@ -81,6 +81,15 @@ function MermaidDiagram({ chart }) {
                         return match;
                     });
 
+                    // Same guard for {decision} / rhombus nodes: parens (or other
+                    // special chars) inside an unquoted {label} break the parser.
+                    cleanMermaid = cleanMermaid.replace(/([A-Za-z0-9_-]+)\{([^{}]+)\}/g, (match, node, innerText) => {
+                        if (/[()]/.test(innerText) && !innerText.includes('"')) {
+                            return `${node}{"${innerText}"}`;
+                        }
+                        return match;
+                    });
+
                     cleanMermaid = cleanMermaid.replace(/(-->\|)([^|]+)(\|)/g, (match, p1, p2, p3) => {
                         return `${p1}${p2.trim()}${p3}`;
                     });
