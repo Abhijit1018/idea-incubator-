@@ -48,18 +48,18 @@ export default function CatalogCard({ entry, index, onSelect }) {
             transition={{ duration: 0.4, delay: index * 0.1 }}
             className={`card-neo flex flex-col gap-6 relative z-10 ${isPending ? 'border-dashed border-neo-muted opacity-70' : ''}`}
         >
-            <div className="flex justify-between items-start border-b-2 border-neo-border pb-4">
-                <div>
-                    <h2 className="text-2xl font-display font-bold uppercase tracking-tight text-white mb-1">
-                        {raw_input.length > 50 ? raw_input.substring(0, 50) + '...' : raw_input}
-                    </h2>
-                    <span className="text-sm font-sans text-neo-muted">
-                        {new Date(created_at).toLocaleString()}
+            <div className="border-b-2 border-neo-border pb-4">
+                <div className="mb-3">
+                    <span className={`inline-block px-3 py-1 font-display font-bold text-sm uppercase tracking-wider border-2 whitespace-nowrap ${isPending ? 'bg-yellow-500/10 border-yellow-500 text-yellow-500' : 'bg-neo-accent/10 border-neo-accent text-neo-accent'}`}>
+                        {entry.input_type === 'tool' ? 'TOOL' : 'IDEA'} • {status}
                     </span>
                 </div>
-                <div className={`px-3 py-1 font-display font-bold text-sm uppercase tracking-wider border-2 ${isPending ? 'bg-yellow-500/10 border-yellow-500 text-yellow-500' : 'bg-neo-accent/10 border-neo-accent text-neo-accent'}`}>
-                    {entry.input_type === 'tool' ? 'TOOL' : 'IDEA'} • {status}
-                </div>
+                <h2 className="text-2xl font-display font-bold uppercase tracking-tight text-white mb-1 break-words">
+                    {raw_input.length > 50 ? raw_input.substring(0, 50) + '...' : raw_input}
+                </h2>
+                <span className="text-sm font-sans text-neo-muted">
+                    {new Date(created_at).toLocaleString()}
+                </span>
             </div>
 
             {isPending ? (
